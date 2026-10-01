@@ -22,8 +22,8 @@ data class Reply(val code: Int, val text: String) {
 class ServerFault(message: String) : Exception(message)
 
 /**
- * Cliente HTTP autenticado. Añade el Bearer token, refresca una vez si llega 401
- * y fuerza el cierre de sesión cuando la sesión ya no es válida (401/403).
+ * Cliente HTTP autenticado. Añade el Bearer token, refresca una vez si llega 401 o 403
+ * y fuerza el cierre de sesión cuando la sesión sigue sin ser válida.
  */
 object HttpGateway {
     private val JSON_TYPE = "application/json".toMediaType()
@@ -65,13 +65,15 @@ object HttpGateway {
         val token = SessionVault.accessToken()
         var reply = execute(build().header("Authorization", "Bearer $token").build())
 
-        if (reply.code == 401) {
+        // El backend responde 403 (no 401) cuando el token vence, así que se cubren los dos
+        if (reply.code == 401 || reply.code == 403) {
             val fresh = renewAccess()
             if (fresh != null) {
                 reply = execute(build().header("Authorization", "Bearer $fresh").build())
             }
         }
 
+        // Si después de refrescar sigue fallando, la sesión ya no sirve
         if (reply.code == 401 || reply.code == 403) kickOut()
         reply
     }
@@ -95,7 +97,9 @@ object HttpGateway {
             SessionVault.wipe()
             return null
         }
-        val access = reply.json.optString("accessToken")
+        val body = reply.json
+        val access = body.textOrNull("accessToken") ?: body.textOrNull("token") ?: body.textOrNull("jwt")
+            ?: return null
         SessionVault.rotateAccess(access)
         return access
     }
