@@ -25,6 +25,9 @@ fun JSONObject.intOrNull(key: String): Int? =
 
 fun JSONObject.decimal(key: String): Double = optDouble(key, 0.0)
 
+fun JSONObject.decimalOrNull(key: String): Double? =
+    if (has(key) && !isNull(key)) optDouble(key) else null
+
 fun JSONObject.flagOr(key: String, fallback: Boolean = false): Boolean =
     if (has(key) && !isNull(key)) optBoolean(key, fallback) else fallback
 

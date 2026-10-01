@@ -2,8 +2,8 @@ package co.gapfinder.mobile.domain
 
 import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.decimal
+import co.gapfinder.mobile.foundation.decimalOrNull
 import co.gapfinder.mobile.foundation.flagOr
-import co.gapfinder.mobile.foundation.flagOrNull
 import co.gapfinder.mobile.foundation.intOr
 import co.gapfinder.mobile.foundation.intOrNull
 import co.gapfinder.mobile.foundation.jsonOf
@@ -279,68 +279,65 @@ data class Crew(
     }
 }
 
-/** Match entre dos estudiantes (antes Match). */
+/** Match entre dos estudiantes (antes Match). Se arma sobre el hueco de cada uno. */
 data class Pairing(
     val id: Int,
+    val startsAt: LocalDateTime,
+    val endsAt: LocalDateTime,
     val state: PairingState,
-    val overlapStart: LocalDateTime,
-    val overlapEnd: LocalDateTime,
-    val createdAt: LocalDateTime,
-    val chosenPastime: Pastime? = null,
-    val suggestedPastime: Pastime? = null,
-    val requester: Member? = null,
-    val receiver: Member? = null,
-    val requesterWindow: FreeWindow? = null,
-    val receiverWindow: FreeWindow? = null,
-    val lines: List<ChatLine> = emptyList(),
+    val score: Double? = null,
+    // Solo llegan con MatchCompleteDTO; cada hueco trae a su dueño
+    val proposerWindow: FreeWindow? = null,
+    val acceptorWindow: FreeWindow? = null,
 ) {
+    val durationMinutes: Int get() = Duration.between(startsAt, endsAt).toMinutes().toInt()
+
+    /** Quien envió la solicitud. */
+    val proposer: Member? get() = proposerWindow?.owner
+
+    /** Quien la recibió. */
+    val acceptor: Member? get() = acceptorWindow?.owner
+
+    fun involves(memberId: Int): Boolean = proposer?.id == memberId || acceptor?.id == memberId
+
+    /** La otra persona del match, vista desde [memberId]. */
+    fun peerOf(memberId: Int): Member? = if (proposer?.id == memberId) acceptor else proposer
+
     fun encode(): JSONObject = jsonOf(
         "id" to id,
+        "startTime" to Chrono.writeMoment(startsAt),
+        "endTime" to Chrono.writeMoment(endsAt),
+        "score" to score,
         "status" to state.wire,
-        "overlapStart" to Chrono.writeMoment(overlapStart),
-        "overlapEnd" to Chrono.writeMoment(overlapEnd),
-        "createdAt" to Chrono.writeMoment(createdAt),
-        "chosenActivity" to chosenPastime?.encode(),
-        "suggestedActivity" to suggestedPastime?.encode(),
-        "requester" to requester?.encode(),
-        "receiver" to receiver?.encode(),
-        "requesterGap" to requesterWindow?.encode(),
-        "receiverGap" to receiverWindow?.encode(),
-        "messages" to lines.toJsonArray { it.encode() },
     )
 
     companion object {
         fun decode(j: JSONObject): Pairing = Pairing(
             id = j.intOr("id"),
+            startsAt = Chrono.readMoment(j.getString("startTime")),
+            endsAt = Chrono.readMoment(j.getString("endTime")),
             state = PairingState.parse(j.textOrNull("status")),
-            overlapStart = Chrono.readMoment(j.getString("overlapStart")),
-            overlapEnd = Chrono.readMoment(j.getString("overlapEnd")),
-            createdAt = Chrono.readMoment(j.getString("createdAt")),
-            chosenPastime = j.nodeOrNull("chosenActivity")?.let(Pastime::decode),
-            suggestedPastime = j.nodeOrNull("suggestedActivity")?.let(Pastime::decode),
-            requester = j.nodeOrNull("requester")?.let(Member::decode),
-            receiver = j.nodeOrNull("receiver")?.let(Member::decode),
-            requesterWindow = j.nodeOrNull("requesterGap")?.let(FreeWindow::decode),
-            receiverWindow = j.nodeOrNull("receiverGap")?.let(FreeWindow::decode),
-            lines = j.nodeList("messages", ChatLine::decode),
+            score = j.decimalOrNull("score"),
+            proposerWindow = j.nodeOrNull("proposerGap")?.let(FreeWindow::decode),
+            acceptorWindow = j.nodeOrNull("acceptorGap")?.let(FreeWindow::decode),
         )
     }
 }
 
-/** Candidato devuelto por /matches/candidates. */
+/** Candidato devuelto por /matches/gap/{gapId}/candidates (antes MatchCandidate). */
 data class PairingProspect(
-    val member: Member,
-    val activeWindow: FreeWindow?,
-    /** Puntaje único: intereses (base) + bono del modo elegido. */
-    val affinity: Double,
-    val sharedHobbies: List<Hobby>,
+    /** Hueco de quien busca. */
+    val proposerWindow: FreeWindow,
+    /** Hueco del candidato, con su usuario. */
+    val acceptorWindow: FreeWindow,
+    /** Puntaje calculado por el backend; hay que devolverlo igual al enviar la solicitud. */
+    val score: Double,
 ) {
     companion object {
         fun decode(j: JSONObject) = PairingProspect(
-            member = Member.decode(j.getJSONObject("user")),
-            activeWindow = j.nodeOrNull("activeGap")?.let(FreeWindow::decode),
-            affinity = j.decimal("compatibility"),
-            sharedHobbies = j.nodeList("commonInterests", Hobby::decode),
+            proposerWindow = FreeWindow.decode(j.getJSONObject("proposerGap")),
+            acceptorWindow = FreeWindow.decode(j.getJSONObject("acceptorGap")),
+            score = j.getDouble("score"),
         )
     }
 }
@@ -381,75 +378,67 @@ data class ChatLine(
 /** Mesa abierta (antes OpenTable). */
 data class Hangout(
     val id: Int,
+    val title: String,
     val description: String,
     val startsAt: LocalDateTime,
     val endsAt: LocalDateTime,
+    val maxParticipants: Int,
     val state: HangoutState,
-    val createdAt: LocalDateTime,
+    val createdAt: LocalDateTime? = null,
     val pastime: Pastime? = null,
+    // Solo llegan con OpenTableCompleteDTO
     val host: Member? = null,
     val spot: CampusSpot? = null,
-    val lines: List<ChatLine> = emptyList(),
-    val attendees: List<HangoutAttendee> = emptyList(),
 ) {
+    /** createdAt no se manda: en el backend la columna no es actualizable. */
     fun encode(): JSONObject = jsonOf(
         "id" to id,
+        "title" to title,
         "description" to description,
         "startTime" to Chrono.writeMoment(startsAt),
         "endTime" to Chrono.writeMoment(endsAt),
+        "maxParticipants" to maxParticipants,
         "status" to state.wire,
-        "createdAt" to Chrono.writeMoment(createdAt),
-        "activity" to pastime?.encode(),
-        "creator" to host?.encode(),
-        "building" to spot?.encode(),
-        "messages" to lines.toJsonArray { it.encode() },
-        "participants" to attendees.toJsonArray { it.encode() },
-    )
+    ).apply {
+        pastime?.let { put("activity", jsonOf("id" to it.id)) }
+    }
 
     companion object {
         fun decode(j: JSONObject): Hangout = Hangout(
             id = j.intOr("id"),
+            title = j.textOr("title"),
             description = j.textOr("description"),
             startsAt = Chrono.readMoment(j.getString("startTime")),
             endsAt = Chrono.readMoment(j.getString("endTime")),
+            maxParticipants = j.intOr("maxParticipants"),
             state = HangoutState.parse(j.textOrNull("status")),
-            createdAt = Chrono.readMoment(j.getString("createdAt")),
+            createdAt = j.textOrNull("createdAt")?.let(Chrono::readMoment),
             pastime = j.nodeOrNull("activity")?.let(Pastime::decode),
             host = j.nodeOrNull("creator")?.let(Member::decode),
             spot = j.nodeOrNull("building")?.let(CampusSpot::decode),
-            lines = j.nodeList("messages", ChatLine::decode),
-            attendees = j.nodeList("participants", HangoutAttendee::decode),
         )
     }
 }
 
-/** Participante de una mesa abierta con su RSVP (antes OpenTableParticipant). */
+/** Participante de una mesa abierta (antes OpenTableParticipant). */
 data class HangoutAttendee(
     val id: Int,
-    val rsvp: Rsvp,
-    val respondedAt: LocalDateTime? = null,
-    val enjoyed: Boolean? = null,
+    val joinedAt: LocalDateTime,
+    // Solo llegan con OpenTableParticipantCompleteDTO
     val hangout: Hangout? = null,
     val member: Member? = null,
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
-        "rsvp" to rsvp.wire,
-        "respondedAt" to respondedAt?.let(Chrono::writeMoment),
-        "enjoyed" to enjoyed,
-        "openTable" to hangout?.encode(),
-        "user" to member?.encode(),
+        "joinedAt" to Chrono.writeMoment(joinedAt),
     )
 
     companion object {
         fun decode(j: JSONObject): HangoutAttendee = HangoutAttendee(
             id = j.intOr("id"),
-            rsvp = Rsvp.parse(j.textOrNull("rsvp")),
-            respondedAt = j.textOrNull("respondedAt")?.let(Chrono::readMoment),
-            enjoyed = j.flagOrNull("enjoyed"),
+            joinedAt = Chrono.readMoment(j.getString("joinedAt")),
             hangout = j.nodeOrNull("openTable")?.let(Hangout::decode),
-            member = j.nodeOrNull("user")?.let(Member::decode)
-                ?: j.intOrNull("userId")?.let(Member::stub),
+            member = j.nodeOrNull("user")?.let(Member::decode),
         )
     }
 }
@@ -458,21 +447,23 @@ data class HangoutAttendee(
 data class Alert(
     val id: Int,
     val kind: AlertKind,
-    val referenceId: Int,
     val message: String,
+    /** Id de la entidad a la que se refiere (por ejemplo, el match propuesto). */
+    val relatedId: Int? = null,
     val seen: Boolean,
     val createdAt: LocalDateTime,
-    val member: Member? = null,
+    // Solo llega con NotificationCompleteDTO
+    val recipient: Member? = null,
 ) {
     companion object {
         fun decode(j: JSONObject) = Alert(
             id = j.intOr("id"),
             kind = AlertKind.parse(j.textOrNull("type")),
-            referenceId = j.intOr("referenceId"),
             message = j.textOr("message"),
+            relatedId = j.intOrNull("relatedEntityId"),
             seen = j.flagOr("read"),
             createdAt = Chrono.readMoment(j.getString("createdAt")),
-            member = j.nodeOrNull("user")?.let(Member::decode),
+            recipient = j.nodeOrNull("recipient")?.let(Member::decode),
         )
     }
 }
@@ -480,31 +471,21 @@ data class Alert(
 /** Punto de ubicación registrado durante un hueco (antes UserLocationLog). */
 data class LocationPing(
     val id: Int,
-    val latitude: Double,
-    val longitude: Double,
     val recordedAt: LocalDateTime,
+    // Solo llegan con UserLocationLogCompleteDTO
     val member: Member? = null,
-    val window: FreeWindow? = null,
     val spot: CampusSpot? = null,
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
-        "latitude" to latitude,
-        "longitude" to longitude,
-        "recordedAt" to Chrono.writeMoment(recordedAt),
-        "user" to member?.encode(),
-        "gap" to window?.encode(),
-        "building" to spot?.encode(),
+        "timestamp" to Chrono.writeMoment(recordedAt),
     )
 
     companion object {
         fun decode(j: JSONObject): LocationPing = LocationPing(
             id = j.intOr("id"),
-            latitude = j.decimal("latitude"),
-            longitude = j.decimal("longitude"),
-            recordedAt = Chrono.readMoment(j.getString("recordedAt")),
+            recordedAt = Chrono.readMoment(j.getString("timestamp")),
             member = j.nodeOrNull("user")?.let(Member::decode),
-            window = j.nodeOrNull("gap")?.let(FreeWindow::decode),
             spot = j.nodeOrNull("building")?.let(CampusSpot::decode),
         )
     }
@@ -519,10 +500,11 @@ data class LoginTicket(
     val name: String,
 ) {
     companion object {
+        // El backend ha cambiado el nombre de estas claves entre versiones; se aceptan todas
         fun decode(j: JSONObject) = LoginTicket(
-            id = j.intOr("id"),
-            accessToken = j.textOr("accessToken"),
-            refreshToken = j.textOr("refreshToken"),
+            id = j.intOrNull("id") ?: j.intOr("userId"),
+            accessToken = j.textOrNull("accessToken") ?: j.textOrNull("token") ?: j.textOr("jwt"),
+            refreshToken = j.textOrNull("refreshToken") ?: j.textOr("refresh_token"),
             email = j.textOr("email"),
             name = j.textOr("name"),
         )
@@ -535,6 +517,7 @@ data class HangoutDropOff(
     val stage: DraftStage,
     val pastimeId: Int? = null,
     val durationMinutes: Int? = null,
+    val maxParticipants: Int? = null,
     val spotId: Int? = null,
 ) {
     fun encode(): JSONObject = jsonOf(
@@ -542,6 +525,7 @@ data class HangoutDropOff(
         "step" to stage.wire,
         "activityId" to pastimeId,
         "durationMinutes" to durationMinutes,
+        "maxParticipants" to maxParticipants,
         "buildingId" to spotId,
     )
 }
@@ -560,6 +544,24 @@ data class DropOffStat(
             abandonments = j.intOr("abandonments"),
             reached = j.intOr("reached"),
             rate = j.decimal("abandonmentRate"),
+        )
+    }
+}
+
+/** Mesas recomendadas en el edificio que más frecuenta el usuario (antes RecommendationResponse). */
+data class Recommendation(
+    val favoriteSpotId: Int? = null,
+    val favoriteSpotName: String? = null,
+    /** Minutos acumulados en ese edificio. */
+    val totalMinutes: Double = 0.0,
+    val hangouts: List<Hangout> = emptyList(),
+) {
+    companion object {
+        fun decode(j: JSONObject) = Recommendation(
+            favoriteSpotId = j.intOrNull("favoriteBuildingId"),
+            favoriteSpotName = j.textOrNull("favoriteBuildingName"),
+            totalMinutes = j.decimal("totalMinutes"),
+            hangouts = j.nodeList("openTables", Hangout::decode),
         )
     }
 }
