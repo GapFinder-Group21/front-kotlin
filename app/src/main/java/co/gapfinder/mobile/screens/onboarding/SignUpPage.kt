@@ -59,6 +59,9 @@ import kotlinx.coroutines.launch
 private val OutlineTone = Color(0xFF79747E)
 private val ArrowTone = Color(0xFF616161)
 
+private const val MIN_PASSWORD_LENGTH = 8
+private val SEMESTER_RANGE = 1..12
+
 /** Registro de cuenta nueva. */
 @Composable
 fun SignUpPage() {
@@ -69,30 +72,59 @@ fun SignUpPage() {
     var secretWord by remember { mutableStateOf("") }
     var secretRepeat by remember { mutableStateOf("") }
     var term by remember { mutableStateOf("") }
-    var program by remember { mutableStateOf<String?>(ACADEMIC_PROGRAMS.first()) }
+    var phone by remember { mutableStateOf("") }
+    var career by remember { mutableStateOf<String?>(ACADEMIC_PROGRAMS.first()) }
     var energy by remember { mutableStateOf(EnergyLevel.Regular) }
     var busy by remember { mutableStateOf(false) }
 
     fun submitAccount() {
+        val name = fullName.trim()
+        val address = mail.trim().lowercase()
+        val phoneNumber = phone.trim()
+
+        // Se valida campo por campo y se avisa del primero que falle
+        if (name.isEmpty()) {
+            Toaster.show("Por favor ingresa tu nombre")
+            return
+        }
+        if (address.isEmpty() || !address.contains("@")) {
+            Toaster.show("Por favor ingresa un correo electrónico válido")
+            return
+        }
+        if (secretWord.length < MIN_PASSWORD_LENGTH) {
+            Toaster.show("La contraseña debe tener al menos $MIN_PASSWORD_LENGTH caracteres")
+            return
+        }
         if (secretWord != secretRepeat) {
             Toaster.show("Las contraseñas no coinciden")
             return
         }
-        val chosenProgram = program
-        if (chosenProgram == null) {
+        val semester = term.trim().toIntOrNull()
+        if (semester == null || semester !in SEMESTER_RANGE) {
+            Toaster.show("El semestre debe ser un número entre ${SEMESTER_RANGE.first} y ${SEMESTER_RANGE.last}")
+            return
+        }
+        val chosenCareer = career
+        if (chosenCareer == null) {
             Toaster.show("Por favor selecciona una carrera")
             return
         }
+        if (phoneNumber.isEmpty()) {
+            Toaster.show("Por favor ingresa tu número de teléfono")
+            return
+        }
+
         busy = true
         scope.launch {
             try {
                 AccountRepository.signUp(
-                    name = fullName.trim(),
-                    email = mail.trim(),
+                    name = name,
+                    email = address,
                     password = secretWord,
-                    program = chosenProgram,
-                    semester = term.trim(),
+                    career = chosenCareer,
+                    semester = semester,
                     energy = energy,
+                    phoneNumber = phoneNumber,
                 )
                 StackNavigator.swap(Destination.LocationGate(fromOnboarding = true))
             } catch (e: Exception) {
@@ -140,25 +172,33 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(14.dp))
 
-            FieldCaption("Academic Program")
+            FieldCaption("Career")
             Spacer(Modifier.height(6.dp))
             OptionPicker(
-                current = program,
+                current = career,
                 options = ACADEMIC_PROGRAMS,
                 caption = { it },
-                onPick = { program = it },
+                onPick = { career = it },
             )
             Spacer(Modifier.height(14.dp))
 
             FormField(
-                placeholder = "Semester",
+                placeholder = "Semester (${SEMESTER_RANGE.first} - ${SEMESTER_RANGE.last})",
                 value = term,
                 onValueChange = { term = it },
                 keyboardType = KeyboardType.Number,
             )
             Spacer(Modifier.height(14.dp))
 
-            FieldCaption("Activity Effort Preference")
+            FormField(
+                placeholder = "Phone Number",
+                value = phone,
+                onValueChange = { phone = it },
+                keyboardType = KeyboardType.Phone,
+            )
+            Spacer(Modifier.height(14.dp))
+
+            FieldCaption("Preferred Effort")
             Spacer(Modifier.height(6.dp))
             OptionPicker(
                 current = energy,
@@ -169,7 +209,7 @@ fun SignUpPage() {
             Spacer(Modifier.height(14.dp))
 
             FormField(
-                placeholder = "Password",
+                placeholder = "Password (min $MIN_PASSWORD_LENGTH characters)",
                 value = secretWord,
                 onValueChange = { secretWord = it },
                 secret = true,
