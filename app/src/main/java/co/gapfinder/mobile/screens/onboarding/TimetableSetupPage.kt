@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.ui.kit.ChoiceTile
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
@@ -59,8 +60,14 @@ fun TimetableSetupPage(onNavigate: (String) -> Unit) {
             )
             Spacer(Modifier.height(32.dp))
 
-            // "Connect Google Calendar" (CalendarLinkPage) queda oculto: el
-            // backend no tiene los endpoints /google/*.
+            ChoiceTile(
+                title = "Connect Google Calendar",
+                subtitle = "Import from your personal calendar",
+                icon = { OptionBadge(Palette.Coral, Glyphs.calendarTodayRounded) },
+                onTap = { StackNavigator.go(Destination.CalendarLink) },
+            )
+
+            Spacer(Modifier.height(16.dp))
 
             ChoiceTile(
                 title = "Add Schedule Manually",
