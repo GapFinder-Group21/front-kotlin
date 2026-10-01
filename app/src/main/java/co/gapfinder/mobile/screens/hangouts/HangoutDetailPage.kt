@@ -51,7 +51,7 @@ import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.HangoutRepository
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutAttendee
-import co.gapfinder.mobile.domain.Rsvp
+import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
@@ -62,14 +62,14 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import java.time.Duration
-import java.time.LocalDateTime
 
 /** Estado de la carga (equivalente al FutureBuilder). */
 private sealed interface DetailPhase {
     data object Waiting : DetailPhase
-    data class Loaded(val hangout: Hangout) : DetailPhase
+    data class Loaded(val hangout: Hangout, val attendees: List<HangoutAttendee>) : DetailPhase
     data class Broken(val reason: Throwable) : DetailPhase
 }
 
@@ -79,7 +79,6 @@ fun HangoutDetailPage(hangoutId: Int) {
     var phase by remember { mutableStateOf<DetailPhase>(DetailPhase.Waiting) }
     var reloadTick by remember { mutableIntStateOf(0) }
     var viewerId by remember { mutableStateOf<Int?>(null) }
-    var enrolled by remember { mutableStateOf(false) }
     var joining by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -87,15 +86,13 @@ fun HangoutDetailPage(hangoutId: Int) {
     LaunchedEffect(reloadTick) {
         phase = DetailPhase.Waiting
         phase = try {
-            val me = SessionVault.memberId()
-            viewerId = me
-            val found = HangoutRepository.byId(hangoutId)
-            if (me != null) {
-                // Se verifica con el servicio de participantes si ya está dentro;
-                // quien salió (OUT) sigue registrado pero puede volver a unirse
-                enrolled = AttendeeRepository.lookup(hangoutId, me)?.rsvp == Rsvp.Joined
+            viewerId = SessionVault.memberId()
+            // La mesa y sus participantes se piden en paralelo
+            coroutineScope {
+                val table = async { HangoutRepository.byId(hangoutId) }
+                val people = async { AttendeeRepository.of(hangoutId) }
+                DetailPhase.Loaded(table.await(), people.await())
             }
-            DetailPhase.Loaded(found)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -108,21 +105,17 @@ fun HangoutDetailPage(hangoutId: Int) {
         scope.launch {
             joining = true
             try {
-                HangoutRepository.join(hangoutId, me)
+                AttendeeRepository.join(hangoutId, me)
                 Toaster.show("Successfully joined the table!", background = Palette.Teal)
-                reloadTick++ // recarga para actualizar el botón
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (e.toString().contains("409")) {
-                    Toaster.show("You are already a member of this table!", background = Palette.Sky)
-                    reloadTick++ // fuerza recarga para bloquear el botón
-                } else {
-                    Toaster.show("Error joining: ${e.asDartString()}")
-                }
+                // El backend explica el motivo (mesa llena, ya estaba dentro, etc.)
+                Toaster.show(e.plainText())
             } finally {
                 joining = false
             }
+            reloadTick++ // recarga para actualizar participantes y botón
         }
     }
 
@@ -147,9 +140,11 @@ fun HangoutDetailPage(hangoutId: Int) {
 
         is DetailPhase.Loaded -> {
             val table = current.hangout
+            val attendees = current.attendees
             val isHost = table.host?.id == viewerId
-            val inside = isHost || enrolled
-            val minutesLeft = Duration.between(LocalDateTime.now(), table.endsAt).toMinutes()
+            val enrolled = attendees.any { it.member?.id == viewerId }
+            // Sin cupo: el backend ya la marcó como no abierta o se alcanzó el máximo
+            val isFull = table.state != HangoutState.Open || attendees.size >= table.maxParticipants
 
             Column(Modifier.fillMaxSize().background(Palette.Fog)) {
                 InkHeader(title = "Open Table Detail", showBack = true)
@@ -173,7 +168,7 @@ fun HangoutDetailPage(hangoutId: Int) {
                     Row(Modifier.fillMaxWidth()) {
                         FactTile(Glyphs.locationOnRounded, "Location", table.spot?.name ?: "Unknown")
                         Spacer(Modifier.width(12.dp))
-                        FactTile(Glyphs.accessTimeFilledRounded, "Ends in", "$minutesLeft min")
+                        FactTile(Glyphs.accessTimeFilledRounded, "Ends in", "${table.minutesLeft()} min")
                     }
 
                     Spacer(Modifier.height(28.dp))
@@ -198,9 +193,9 @@ fun HangoutDetailPage(hangoutId: Int) {
                     }
 
                     Spacer(Modifier.height(32.dp))
-                    SectionCaption("PARTICIPANTS (${table.attendees.size})")
+                    SectionCaption("PARTICIPANTS (${attendees.size}/${table.maxParticipants})")
                     Spacer(Modifier.height(12.dp))
-                    AttendeeStrip(table.attendees)
+                    AttendeeStrip(attendees)
                 }
 
                 // Zona del botón de acción
@@ -208,13 +203,17 @@ fun HangoutDetailPage(hangoutId: Int) {
                     Modifier.fillMaxWidth().navigationBarsPadding().padding(24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (joining) {
-                        CircularProgressIndicator(Modifier.size(36.dp))
-                    } else {
-                        PillButton(
-                            label = if (inside) "Already a member" else "Join Table",
-                            onClick = if (inside) null else ({ enroll() }),
-                            color = if (inside) LightGrey else Palette.Sky,
+                    when {
+                        joining -> CircularProgressIndicator(Modifier.size(36.dp))
+                        isHost || enrolled -> PillButton(
+                            label = if (isHost) "You created this table" else "Already a member",
+                            onClick = null,
+                            color = LightGrey,
+                        )
+                        else -> PillButton(
+                            label = if (isFull) "Table full" else "Join Table",
+                            onClick = if (isFull) null else ({ enroll() }),
+                            color = if (isFull) LightGrey else Palette.Sky,
                         )
                     }
                 }
@@ -264,7 +263,10 @@ private fun HostCard(table: Hangout) {
 
 @Composable
 private fun PastimeCard(table: Hangout) {
-    val pastime = table.pastime ?: return
+    val pastime = table.pastime
+    // Si la mesa no trae actividad se muestra su título
+    val headline = pastime?.name ?: table.title
+    val effort = pastime?.let { " · ${it.energy.wire.lowercase()} effort" } ?: ""
     val shape = RoundedCornerShape(16.dp)
     Row(
         Modifier
@@ -284,15 +286,15 @@ private fun PastimeCard(table: Hangout) {
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                text = pastime.title,
+                text = headline,
                 style = Typo.heading(FontWeight.ExtraBold).copy(fontSize = 16.sp, color = Palette.Ink),
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "${pastime.durationMinutes} min · ${pastime.energy.wire.lowercase()} effort",
+                text = "Up to ${table.maxParticipants} participants$effort",
                 style = Typo.paragraph().copy(fontSize = 13.sp, color = Palette.Ink.fade(0.5f)),
             )
-            pastime.hobby?.let { hobby ->
+            pastime?.hobby?.let { hobby ->
                 Spacer(Modifier.height(8.dp))
                 val chip = RoundedCornerShape(20.dp)
                 Text(
