@@ -25,10 +25,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import co.gapfinder.mobile.data.AttendeeRepository
+import co.gapfinder.mobile.domain.Hangout
+import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
+import java.time.Duration
+import java.time.LocalDateTime
 
 // Piezas compartidas por las pantallas de mesas abiertas.
 
@@ -38,9 +43,10 @@ internal val SurfaceText = Color(0xFF1D1B20)
 /** Primario del tema (semilla deepPurple). */
 internal val ThemePrimary = Color(0xFF65558F)
 
-/** Colors.grey / grey[400] de Flutter. */
+/** Colors.grey / grey[400] / grey[300] de Flutter. */
 internal val MidGrey = Color(0xFF9E9E9E)
 internal val LightGrey = Color(0xFFBDBDBD)
+internal val PaleGrey = Color(0xFFE0E0E0)
 
 /** Fondo de Scaffold sin color explícito. */
 internal val BareScaffold = Color(0xFFFEF7FF)
@@ -50,6 +56,17 @@ internal fun Throwable.asDartString(): String = "Exception: ${message ?: ""}"
 
 /** Mensaje sin el prefijo "Exception: " (replaceAll). */
 internal fun Throwable.plainText(): String = message ?: toString()
+
+/** true si el usuario figura entre los participantes de la mesa. */
+internal suspend fun attends(hangoutId: Int, memberId: Int): Boolean =
+    AttendeeRepository.of(hangoutId).any { it.member?.id == memberId }
+
+/** La mesa sigue en curso: abierta o llena, y todavía no llega su hora de fin. */
+internal fun Hangout.isOngoing(): Boolean =
+    (state == HangoutState.Open || state == HangoutState.Full) && endsAt.isAfter(LocalDateTime.now())
+
+/** Minutos que le quedan a la mesa. */
+internal fun Hangout.minutesLeft(): Long = Duration.between(LocalDateTime.now(), endsAt).toMinutes()
 
 /**
  * Botón tipo ElevatedButton de pastilla (elevación 0, alto mínimo 40, ancho mínimo 64,
@@ -64,6 +81,7 @@ internal fun PillAction(
     vertical: Dp,
     onTap: () -> Unit,
     leading: ImageVector? = null,
+    textColor: Color = Palette.White,
 ) {
     val shape = RoundedCornerShape(20.dp)
     Box(Modifier.padding(vertical = 4.dp)) {
@@ -77,10 +95,10 @@ internal fun PillAction(
             horizontalArrangement = Arrangement.Center,
         ) {
             if (leading != null) {
-                Icon(leading, contentDescription = null, tint = Palette.White, modifier = Modifier.size(18.dp))
+                Icon(leading, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(label, style = textStyle.copy(color = Palette.White))
+            Text(label, style = textStyle.copy(color = textColor))
         }
     }
 }
@@ -122,7 +140,7 @@ internal fun BlurbBox(text: String, edge: Color) {
     }
 }
 
-/** Etiqueta con el título de la actividad (fondo celeste suave). */
+/** Etiqueta con el título de la mesa (fondo celeste suave). */
 @Composable
 internal fun PastimeTag(title: String) {
     Text(
@@ -131,5 +149,14 @@ internal fun PastimeTag(title: String) {
         modifier = Modifier
             .background(Palette.Sky.fade(0.12f), RoundedCornerShape(10.dp))
             .padding(horizontal = 10.dp, vertical = 2.dp),
+    )
+}
+
+/** Texto "Up to N people" del pie de las tarjetas de mesa. */
+@Composable
+internal fun CapacityNote(maxParticipants: Int) {
+    Text(
+        text = "Up to $maxParticipants people",
+        style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 11.sp, color = Palette.Ink.fade(0.45f)),
     )
 }

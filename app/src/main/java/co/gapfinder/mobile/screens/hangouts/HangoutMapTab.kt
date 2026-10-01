@@ -40,9 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.GeoProbe
 import co.gapfinder.mobile.data.HangoutRepository
-import co.gapfinder.mobile.data.MemberRepository
-import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.Hangout
+import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.kit.CampusBoard
 import co.gapfinder.mobile.ui.kit.Glyphs
@@ -55,19 +54,22 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.LocalDateTime
 
 private const val TAG = "HangoutMapTab"
 private const val GPS_REQUIRED = "Location is required to discover tables nearby."
 
-/** Pestaña "Open Tables": mapa del campus + mesas descubribles (antes MapScreen). */
+/** Pestaña "Open Tables": mapa del campus + mesas abiertas (antes MapScreen). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HangoutMapTab() {
-    var nearbySpot by remember { mutableStateOf<CampusSpot?>(null) }
     var listings by remember { mutableStateOf<List<Hangout>>(emptyList()) }
+    // Mesas en las que el usuario ya participa
+    var joinedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var fetching by remember { mutableStateOf(true) }
     var viewerId by remember { mutableStateOf<Int?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -81,35 +83,25 @@ fun HangoutMapTab() {
             viewerId = me
             if (me == null) return
 
-            // 0. GPS encendido y con permiso
-            val gpsReady = GeoProbe.isReady()
-            Log.d(TAG, "DEBUG: MapScreen hasLocation check: $gpsReady")
-            if (!gpsReady) {
+            // GPS encendido y con permiso
+            if (!GeoProbe.isReady()) {
                 notice = GPS_REQUIRED
-                fetching = false
                 return
             }
 
-            // 1. Perfil (edificio actual)
-            try {
-                nearbySpot = MemberRepository.byId(me).currentSpot
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.d(TAG, "Note: Profile load failed: $e")
-            }
+            // Solo las mesas abiertas que todavía no terminan
+            val now = LocalDateTime.now()
+            val open = HangoutRepository.all().filter { it.state == HangoutState.Open && it.endsAt.isAfter(now) }
+            listings = open
 
-            // 2. Mesas
-            listings = HangoutRepository.discoverFor(me)
+            // Se consulta en paralelo en cuáles ya está el usuario
+            val checks = coroutineScope { open.map { table -> async { attendsQuietly(table.id, me) } }.awaitAll() }
+            joinedIds = open.filterIndexed { index, _ -> checks[index] }.map { it.id }.toSet()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.d(TAG, "Error loading Discoverable Open Tables: $e")
-            notice = if (e.toString().contains("409")) {
-                "YOU HAVE AN ACTIVE MATCH OR TABLE.\nComplete it to discover new ones!"
-            } else {
-                e.plainText()
-            }
+            Log.d(TAG, "Error loading Open Tables: $e")
+            notice = e.plainText()
         } finally {
             fetching = false
         }
@@ -146,10 +138,19 @@ fun HangoutMapTab() {
                         ListingBlock(
                             notice = notice,
                             listings = listings,
+                            viewerId = viewerId,
+                            joinedIds = joinedIds,
                             onRetry = { scope.launch { refreshBoard() } },
                             onEnableGps = {
                                 scope.launch {
                                     StackNavigator.goAndWait(Destination.LocationGate())
+                                    refreshBoard()
+                                }
+                            },
+                            onOpen = { table ->
+                                // Al volver del detalle se recarga, por si el usuario se unió
+                                scope.launch {
+                                    StackNavigator.goAndWait(Destination.HangoutDetail(table.id))
                                     refreshBoard()
                                 }
                             },
@@ -159,6 +160,15 @@ fun HangoutMapTab() {
             }
         }
     }
+}
+
+/** Como [attends], pero un fallo al consultar cuenta como "no participa". */
+private suspend fun attendsQuietly(hangoutId: Int, memberId: Int): Boolean = try {
+    attends(hangoutId, memberId)
+} catch (e: CancellationException) {
+    throw e
+} catch (ignored: Exception) {
+    false
 }
 
 @Composable
@@ -243,8 +253,11 @@ private fun LegendDot(tone: Color, caption: String) {
 private fun ListingBlock(
     notice: String?,
     listings: List<Hangout>,
+    viewerId: Int?,
+    joinedIds: Set<Int>,
     onRetry: () -> Unit,
     onEnableGps: () -> Unit,
+    onOpen: (Hangout) -> Unit,
 ) {
     if (notice != null) {
         val gpsIssue = notice.contains("Location is required")
@@ -296,13 +309,16 @@ private fun ListingBlock(
     }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        listings.forEach { item -> DiscoverCard(item) }
+        listings.forEach { item ->
+            // El creador también cuenta como dentro de la mesa
+            val alreadyIn = item.host?.id == viewerId || item.id in joinedIds
+            DiscoverCard(item, alreadyIn = alreadyIn, onOpen = { onOpen(item) })
+        }
     }
 }
 
 @Composable
-private fun DiscoverCard(item: Hangout) {
-    val minutesLeft = Duration.between(LocalDateTime.now(), item.endsAt).toMinutes()
+private fun DiscoverCard(item: Hangout, alreadyIn: Boolean, onOpen: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
 
     Column(
@@ -313,7 +329,7 @@ private fun DiscoverCard(item: Hangout) {
             .background(Color.White, shape)
             .border(1.5.dp, Palette.Ink.fade(0.07f), shape)
     ) {
-        // Cabecera: anfitrión, lugar, actividad y tiempo restante
+        // Cabecera: anfitrión, lugar, título y tiempo restante
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -339,7 +355,7 @@ private fun DiscoverCard(item: Hangout) {
                         style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 12.sp, color = Palette.Ink.fade(0.45f)),
                     )
                     Spacer(Modifier.width(8.dp))
-                    item.pastime?.let { PastimeTag(it.title) }
+                    PastimeTag(item.title)
                     Spacer(Modifier.width(8.dp))
                     Icon(
                         Glyphs.accessTimeRounded,
@@ -349,7 +365,7 @@ private fun DiscoverCard(item: Hangout) {
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "${minutesLeft}m left",
+                        text = "${item.minutesLeft()}m left",
                         style = Typo.paragraph().copy(fontSize = 12.sp, color = Palette.Ink.fade(0.45f)),
                     )
                 }
@@ -359,35 +375,21 @@ private fun DiscoverCard(item: Hangout) {
         BlurbCaption()
         BlurbBox(item.description, Palette.Sky)
 
-        // Pie: interés + botón Join
+        // Pie: cupo + botón Join (gris si ya está dentro)
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            item.pastime?.hobby?.let { hobby ->
-                Row(
-                    Modifier
-                        .background(Palette.Teal.fade(0.12f), RoundedCornerShape(20.dp))
-                        .border(1.dp, Palette.Teal.fade(0.25f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Glyphs.starRounded, contentDescription = null, tint = Palette.Teal, modifier = Modifier.size(12.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = hobby.name,
-                        style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 11.sp, color = Palette.Teal),
-                    )
-                }
-            }
+            CapacityNote(item.maxParticipants)
             Spacer(Modifier.weight(1f))
             PillAction(
-                label = "Join",
-                fill = Palette.Sky,
+                label = if (alreadyIn) "Joined" else "Join",
+                fill = if (alreadyIn) PaleGrey else Palette.Sky,
                 textStyle = Typo.paragraph(FontWeight.ExtraBold).copy(fontSize = 12.sp),
                 horizontal = 18.dp,
                 vertical = 7.dp,
-                onTap = { StackNavigator.go(Destination.HangoutDetail(item.id)) },
+                onTap = onOpen,
+                textColor = if (alreadyIn) Palette.Ink.fade(0.5f) else Palette.White,
             )
         }
     }
