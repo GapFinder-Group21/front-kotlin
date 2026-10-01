@@ -34,7 +34,7 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 
 /** Pestañas de la barra inferior. */
-enum class DockTab(val key: String) { Schedule("schedule"), Friends("friends"), Match("match"), Map("map"), Profile("profile") }
+enum class DockTab(val key: String) { Schedule("schedule"), Friends("friends"), Match("match"), Map("map"), Suggest("suggest") }
 
 /** Barra de navegación inferior con el botón central de Match (antes BottomNav). */
 @Composable
@@ -51,7 +51,7 @@ fun DockBar(active: DockTab, onSelect: (DockTab) -> Unit) {
             DockItem(DockTab.Friends, "Friends", Glyphs.peopleOutlineRounded, active, onSelect)
             CenterMatchItem(onSelect)
             DockItem(DockTab.Map, "Open Tables", Glyphs.locationOnOutlined, active, onSelect)
-            DockItem(DockTab.Profile, "Profile", Glyphs.personOutlineRounded, active, onSelect)
+            DockItem(DockTab.Suggest, "Suggest", Glyphs.lightbulbOutlined, active, onSelect)
         }
     }
 }
