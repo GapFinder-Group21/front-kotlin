@@ -13,50 +13,42 @@ import co.gapfinder.mobile.foundation.textOr
 import co.gapfinder.mobile.foundation.textOrNull
 import co.gapfinder.mobile.foundation.toJsonArray
 import org.json.JSONObject
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
 
 // Cada modelo expone `decode(JSONObject)` y `encode()`; las claves JSON son las del backend.
+// El backend responde con dos formas de cada entidad: el DTO básico (solo campos propios)
+// y el completo (con relaciones). Los campos de relaciones son opcionales por eso.
 
 /** Usuario (antes User). */
 data class Member(
     val id: Int,
     val name: String,
     val email: String,
-    val program: String,
-    val semester: String,
+    val career: String,
+    val semester: Int = 0,
+    val phoneNumber: String? = null,
     val avatarUrl: String? = null,
     val verified: Boolean = false,
-    val energy: EnergyLevel = EnergyLevel.Regular,
-    val locationUpdatedAt: LocalDateTime? = null,
+    val energy: EnergyLevel? = null,
     val createdAt: LocalDateTime? = null,
-    val currentSpot: CampusSpot? = null,
+    val locationUpdatedAt: LocalDateTime? = null,
+    // Solo llegan con UserCompleteDTO
     val hobbies: List<Hobby> = emptyList(),
-    val lectures: List<Lecture> = emptyList(),
-    val windows: List<FreeWindow> = emptyList(),
-    val ownedCrews: List<Crew> = emptyList(),
-    val crews: List<Crew> = emptyList(),
-    val sentBonds: List<Bond> = emptyList(),
-    val receivedBonds: List<Bond> = emptyList(),
+    val currentSpot: CampusSpot? = null,
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
         "name" to name,
         "email" to email,
-        "program" to program,
+        "phoneNumber" to phoneNumber,
+        "career" to career,
         "semester" to semester,
         "avatarUrl" to avatarUrl,
         "verified" to verified,
+        "preferredEffort" to energy?.wire,
         "locationUpdatedAt" to locationUpdatedAt?.let(Chrono::writeMoment),
-        "createdAt" to createdAt?.let(Chrono::writeMoment),
-        "currentBuilding" to currentSpot?.encode(),
-        "interests" to hobbies.toJsonArray { it.encode() },
-        "classBlocks" to lectures.toJsonArray { it.encode() },
-        "gaps" to windows.toJsonArray { it.encode() },
-        "createdGroups" to ownedCrews.toJsonArray { it.encode() },
-        "groups" to crews.toJsonArray { it.encode() },
-        "sentFriendRequests" to sentBonds.toJsonArray { it.encode() },
-        "receivedFriendRequests" to receivedBonds.toJsonArray { it.encode() },
     )
 
     companion object {
@@ -64,25 +56,17 @@ data class Member(
             id = j.intOr("id"),
             name = j.textOr("name"),
             email = j.textOr("email"),
-            program = j.textOr("program"),
-            semester = j.textOr("semester"),
+            career = j.textOr("career"),
+            semester = j.intOr("semester"),
+            phoneNumber = j.textOrNull("phoneNumber"),
             avatarUrl = j.textOrNull("avatarUrl"),
             verified = j.flagOr("verified"),
-            energy = EnergyLevel.parse(j.textOrNull("activityEffortPreference")),
-            locationUpdatedAt = j.textOrNull("locationUpdatedAt")?.let(Chrono::readMoment),
+            energy = j.textOrNull("preferredEffort")?.let(EnergyLevel::parse),
             createdAt = j.textOrNull("createdAt")?.let(Chrono::readMoment),
-            currentSpot = j.nodeOrNull("currentBuilding")?.let(CampusSpot::decode),
+            locationUpdatedAt = j.textOrNull("locationUpdatedAt")?.let(Chrono::readMoment),
             hobbies = j.nodeList("interests", Hobby::decode),
-            lectures = j.nodeList("classBlocks", Lecture::decode),
-            windows = j.nodeList("gaps", FreeWindow::decode),
-            ownedCrews = j.nodeList("createdGroups", Crew::decode),
-            crews = j.nodeList("groups", Crew::decode),
-            sentBonds = j.nodeList("sentFriendRequests", Bond::decode),
-            receivedBonds = j.nodeList("receivedFriendRequests", Bond::decode),
+            currentSpot = j.nodeOrNull("currentBuilding")?.let(CampusSpot::decode),
         )
-
-        /** Usuario "vacío" con solo el id, como el que se arma cuando el backend manda userId. */
-        fun stub(id: Int) = Member(id = id, name = "", email = "", program = "", semester = "")
     }
 }
 
@@ -90,19 +74,16 @@ data class Member(
 data class Hobby(
     val id: Int,
     val name: String,
-    val members: List<Member> = emptyList(),
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
         "name" to name,
-        "users" to members.toJsonArray { it.encode() },
     )
 
     companion object {
         fun decode(j: JSONObject) = Hobby(
             id = j.intOr("id"),
             name = j.textOr("name"),
-            members = j.nodeList("users", Member::decode),
         )
     }
 }
@@ -110,28 +91,25 @@ data class Hobby(
 /** Actividad del catálogo (antes Activity). */
 data class Pastime(
     val id: Int,
-    val title: String,
-    val description: String,
+    val name: String,
     val durationMinutes: Int,
     val energy: EnergyLevel,
+    // Solo llega con ActivityCompleteDTO
     val hobby: Hobby? = null,
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
-        "title" to title,
-        "description" to description,
+        "name" to name,
         "durationMinutes" to durationMinutes,
-        "activityEffortLevel" to energy.wire,
-        "interest" to hobby?.encode(),
+        "effortType" to energy.wire,
     )
 
     companion object {
         fun decode(j: JSONObject) = Pastime(
             id = j.intOr("id"),
-            title = j.textOr("title"),
-            description = j.textOr("description"),
+            name = j.textOr("name"),
             durationMinutes = j.intOr("durationMinutes"),
-            energy = EnergyLevel.parse(j.textOrNull("activityEffortLevel")),
+            energy = EnergyLevel.parse(j.textOrNull("effortType")),
             hobby = j.nodeOrNull("interest")?.let(Hobby::decode),
         )
     }
@@ -141,12 +119,9 @@ data class Pastime(
 data class CampusSpot(
     val id: Int,
     val name: String,
-    val latitude: Double,
-    val longitude: Double,
-    val radiusMeters: Double,
-    val presentMembers: List<Member> = emptyList(),
-    val hangouts: List<Hangout> = emptyList(),
-    val pings: List<LocationPing> = emptyList(),
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val radiusMeters: Double = 0.0,
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
@@ -154,9 +129,6 @@ data class CampusSpot(
         "latitude" to latitude,
         "longitude" to longitude,
         "radiusMeters" to radiusMeters,
-        "currentUsers" to presentMembers.toJsonArray { it.encode() },
-        "openTables" to hangouts.toJsonArray { it.encode() },
-        "locationLogs" to pings.toJsonArray { it.encode() },
     )
 
     companion object {
@@ -166,9 +138,6 @@ data class CampusSpot(
             latitude = j.decimal("latitude"),
             longitude = j.decimal("longitude"),
             radiusMeters = j.decimal("radiusMeters"),
-            presentMembers = j.nodeList("currentUsers", Member::decode),
-            hangouts = j.nodeList("openTables", Hangout::decode),
-            pings = j.nodeList("locationLogs", LocationPing::decode),
         )
     }
 }
@@ -221,17 +190,20 @@ data class FreeWindow(
     val id: Int,
     val startsAt: LocalDateTime,
     val endsAt: LocalDateTime,
-    val durationMinutes: Int,
+    val ownerId: Int? = null,
+    // Solo llega con GapCompleteDTO (candidatos y pendientes de match)
     val owner: Member? = null,
-    val pings: List<LocationPing> = emptyList(),
 ) {
+    val durationMinutes: Int get() = Duration.between(startsAt, endsAt).toMinutes().toInt()
+
+    /** true si el hueco está corriendo en ese instante (inicio inclusive, fin exclusive). */
+    fun isLiveAt(moment: LocalDateTime): Boolean = !moment.isBefore(startsAt) && moment.isBefore(endsAt)
+
     fun encode(): JSONObject = jsonOf(
         "id" to id,
         "startTime" to Chrono.writeMoment(startsAt),
         "endTime" to Chrono.writeMoment(endsAt),
-        "durationMinutes" to durationMinutes,
-        "user" to owner?.encode(),
-        "locationLogs" to pings.toJsonArray { it.encode() },
+        "userId" to ownerId,
     )
 
     companion object {
@@ -239,9 +211,8 @@ data class FreeWindow(
             id = j.intOr("id"),
             startsAt = Chrono.readMoment(j.getString("startTime")),
             endsAt = Chrono.readMoment(j.getString("endTime")),
-            durationMinutes = j.intOr("durationMinutes"),
+            ownerId = j.intOrNull("userId"),
             owner = j.nodeOrNull("user")?.let(Member::decode),
-            pings = j.nodeList("locationLogs", LocationPing::decode),
         )
     }
 }
@@ -251,15 +222,18 @@ data class Bond(
     val id: Int,
     val state: BondState,
     val createdAt: LocalDateTime,
+    val requesterId: Int? = null,
+    val receiverId: Int? = null,
+    // Solo llegan con FriendshipCompleteDTO
     val requester: Member? = null,
-    val addressee: Member? = null,
+    val receiver: Member? = null,
 ) {
     fun encode(): JSONObject = jsonOf(
         "id" to id,
         "status" to state.wire,
         "createdAt" to Chrono.writeMoment(createdAt),
-        "requester" to requester?.encode(),
-        "addressee" to addressee?.encode(),
+        "requesterId" to requesterId,
+        "receiverId" to receiverId,
     )
 
     companion object {
@@ -267,8 +241,10 @@ data class Bond(
             id = j.intOr("id"),
             state = BondState.parse(j.textOrNull("status")),
             createdAt = Chrono.readMoment(j.getString("createdAt")),
+            requesterId = j.intOrNull("requesterId"),
+            receiverId = j.intOrNull("receiverId"),
             requester = j.nodeOrNull("requester")?.let(Member::decode),
-            addressee = j.nodeOrNull("addressee")?.let(Member::decode),
+            receiver = j.nodeOrNull("receiver")?.let(Member::decode),
         )
     }
 }
