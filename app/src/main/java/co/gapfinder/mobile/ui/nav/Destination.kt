@@ -1,9 +1,8 @@
 package co.gapfinder.mobile.ui.nav
 
-import co.gapfinder.mobile.domain.FreeWindow
-import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.PairingFocus
+import co.gapfinder.mobile.domain.PairingProspect
 import co.gapfinder.mobile.domain.Pastime
 
 /**
@@ -35,13 +34,11 @@ sealed interface Destination {
     /** '/searching-match' */
     data class PairingSearch(val memberId: Int, val focus: PairingFocus) : Destination
 
-    /** '/match-found' */
+    /** '/match-found' — [currentWindowId] es el hueco activo de quien busca. */
     data class PairingCandidate(
         val memberId: Int,
-        val candidate: Member,
-        val candidateWindow: FreeWindow?,
-        val affinity: Double,
-        val sharedHobbies: List<Hobby>,
+        val currentWindowId: Int,
+        val prospect: PairingProspect,
     ) : Destination
 
     /** '/waiting-match' */
@@ -58,9 +55,6 @@ sealed interface Destination {
     /** '/match-invitation' */
     data class PairingInvite(val pairingId: Int) : Destination
 
-    /** '/chat' */
-    data class Conversation(val pairingId: Int? = null, val hangoutId: Int? = null) : Destination
-
     /** '/create-open-table' */
     data object HangoutComposer : Destination
     /** '/my-open-tables' */
@@ -68,10 +62,12 @@ sealed interface Destination {
     /** '/open-table-detail' */
     data class HangoutDetail(val hangoutId: Int) : Destination
 
+    /** '/gap-detail' */
+    data class WindowDetail(val windowId: Int) : Destination
+
     /**
-     * Rutas que la app Flutter referenciaba pero nunca registró
-     * ('/gap-detail', '/friend-match-pending', '/edit-interests', '/activity-preferences').
-     * Se ignoran de forma segura en vez de romper la app.
+     * Ruta que no está registrada. Se ignora de forma segura en vez de romper la app
+     * (en Flutter un pushNamed a una ruta inexistente lanza una excepción).
      */
     data class Unmapped(val path: String) : Destination
 }
