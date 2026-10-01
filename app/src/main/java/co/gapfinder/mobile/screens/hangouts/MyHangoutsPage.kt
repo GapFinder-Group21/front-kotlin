@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.HangoutRepository
 import co.gapfinder.mobile.domain.Hangout
-import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
@@ -59,6 +58,7 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -79,15 +79,13 @@ fun MyHangoutsPage() {
         fault = null
         try {
             val me = SessionVault.memberId() ?: return
-            val (mine, joined) = coroutineScope {
-                val a = async { HangoutRepository.hostedBy(me) }
-                val b = async { HangoutRepository.joinedBy(me) }
-                a.await() to b.await()
-            }
+            val everything = HangoutRepository.all()
+            val (mine, others) = everything.partition { it.host?.id == me }
+
+            // De las ajenas quedan solo aquellas en las que el usuario figura como participante
+            val checks = coroutineScope { others.map { table -> async { attends(table.id, me) } }.awaitAll() }
             hosted = mine
-            // Se quitan de "unidas" las que ya aparecen como creadas
-            val ownIds = mine.map { it.id }.toSet()
-            attended = joined.filter { it.id !in ownIds }
+            attended = others.filterIndexed { index, _ -> checks[index] }
             pending = false
         } catch (e: CancellationException) {
             throw e
@@ -220,7 +218,7 @@ private fun NothingYet() {
 
 @Composable
 private fun HistoryCard(item: Hangout, owner: Boolean) {
-    val live = item.state == HangoutState.Running
+    val live = item.isOngoing()
     val shape = RoundedCornerShape(16.dp)
 
     Column(
@@ -251,7 +249,7 @@ private fun HistoryCard(item: Hangout, owner: Boolean) {
                     StateBadge(live)
                 }
                 Spacer(Modifier.height(3.dp))
-                item.pastime?.let { PastimeTag(it.title) }
+                PastimeTag(item.title)
             }
         }
 
@@ -262,21 +260,13 @@ private fun HistoryCard(item: Hangout, owner: Boolean) {
             Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            item.pastime?.hobby?.let { hobby ->
-                Text(
-                    text = hobby.name,
-                    style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 11.sp, color = Palette.Sky),
-                    modifier = Modifier
-                        .background(Palette.Sky.fade(0.1f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 10.dp, vertical = 3.dp),
-                )
-            }
+            CapacityNote(item.maxParticipants)
             Spacer(Modifier.weight(1f))
             if (live) {
                 PillAction(
                     label = "View",
                     fill = Palette.Ink,
-                    textStyle = Typo.paragraph(FontWeight.Bold).copy(fontSize = 12.sp),
+                    textStyle = Typo.paragraph(FontWeight.ExtraBold).copy(fontSize = 12.sp),
                     horizontal = 18.dp,
                     vertical = 7.dp,
                     onTap = { StackNavigator.go(Destination.HangoutDetail(item.id)) },
