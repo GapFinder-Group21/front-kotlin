@@ -1,8 +1,8 @@
 package co.gapfinder.mobile.domain
 
-/** Nivel de energía de una actividad o preferencia (QUIET / NORMAL / ACTIVE). */
+/** Nivel de esfuerzo de una actividad o preferencia (EffortTypeEnum: LOW / MEDIUM / HIGH). */
 enum class EnergyLevel(val wire: String) {
-    Calm("QUIET"), Regular("NORMAL"), Lively("ACTIVE");
+    Calm("LOW"), Regular("MEDIUM"), Lively("HIGH");
 
     companion object {
         fun parse(raw: String?): EnergyLevel =
@@ -29,9 +29,9 @@ enum class BondState(val wire: String) {
     }
 }
 
-/** Estados de MatchStatusEnum en el backend. Live = aceptado; si sigue vigente lo decide overlapEnd. */
+/** Estados de MatchStatusEnum en el backend. Live = aceptado y todavía sin completar. */
 enum class PairingState(val wire: String) {
-    AwaitingReply("PENDING"), Live("ACCEPTED"), Turned("REJECTED"), Finished("CANCELLED");
+    AwaitingReply("PENDING"), Live("ACCEPTED"), Turned("REJECTED"), Finished("COMPLETED");
 
     companion object {
         fun parse(raw: String?): PairingState =
@@ -39,60 +39,47 @@ enum class PairingState(val wire: String) {
     }
 }
 
-/** Criterio extra con el que se priorizan los candidatos de match. */
+/** Criterio con el que se priorizan los candidatos de match (antes MatchModeEnum). */
 enum class PairingFocus(val wire: String, val caption: String) {
-    Program("SAME_PROGRAM", "Same Program"),
-    Semester("SAME_SEMESTER", "Same Semester"),
-    Energy("SAME_EFFORT", "Same Effort");
+    Career("CAREER", "Career"),
+    Interests("INTERESTS", "Interests"),
+    Energy("EFFORT", "Effort");
 
     companion object {
-        fun parse(raw: String): PairingFocus = entries.first { it.wire == raw }
+        fun parse(raw: String?): PairingFocus =
+            entries.firstOrNull { it.wire.equals(raw, ignoreCase = true) } ?: Career
     }
 }
 
-/** Tipos de NotificationTypeEnum en el backend; cualquier otro valor cae en Platform. */
+/** Tipos de NotificationTypeEnum en el backend; cualquier otro valor cae en BondAsked. */
 enum class AlertKind(val wire: String) {
-    PairingAsked("MATCH_REQUEST"),
+    BondAsked("FRIEND_REQUEST_SENT"),
+    BondAccepted("FRIEND_REQUEST_ACCEPTED"),
+    BondDeclined("FRIEND_REQUEST_REJECTED"),
+    PairingAsked("MATCH_PROPOSED"),
     PairingAccepted("MATCH_ACCEPTED"),
     PairingDeclined("MATCH_REJECTED"),
-    BondAsked("FRIEND_REQUEST"),
-    BondAccepted("FRIEND_ACCEPTED"),
-    HangoutInvite("OPEN_TABLE_INVITE"),
-    HangoutJoined("OPEN_TABLE_JOIN"),
-    FriendHosting("FRIEND_OPEN_TABLE_CREATED"),
-    FriendFree("GAP_STARTING_FRIEND"),
-    CrewFree("GROUP_GAP_AVAILABLE"),
-    WindowClosingSoon("GAP_ENDING_SOON"),
-    WindowClosed("GAP_ENDED"),
-    Platform("SYSTEM");
+    HangoutJoined("OPEN_TABLE_JOINED");
 
     companion object {
         fun parse(raw: String?): AlertKind =
-            entries.firstOrNull { it.wire.equals(raw, ignoreCase = true) } ?: Platform
+            entries.firstOrNull { it.wire.equals(raw, ignoreCase = true) } ?: BondAsked
     }
 }
 
+/** Estados de OpenTableStatusEnum: abierta, llena, terminada o vacía. */
 enum class HangoutState(val wire: String) {
-    Running("ACTIVE"), Over("ENDED");
+    Open("OPEN"), Full("FULL"), Over("COMPLETED"), Vacant("EMPTY");
 
     companion object {
         fun parse(raw: String?): HangoutState =
-            entries.firstOrNull { it.wire.equals(raw, ignoreCase = true) } ?: Running
+            entries.firstOrNull { it.wire.equals(raw, ignoreCase = true) } ?: Open
     }
 }
 
-enum class Rsvp(val wire: String) {
-    Joined("IN"), Left("OUT"), Undecided("PENDING");
-
-    companion object {
-        fun parse(raw: String?): Rsvp =
-            entries.firstOrNull { it.wire.equals(raw, ignoreCase = true) } ?: Undecided
-    }
-}
-
-/** Pasos del formulario de creación de una Open Table (ACTIVITY, DESCRIPTION, LOCATION). */
+/** Pasos del formulario de creación de una Open Table (ACTIVITY, DESCRIPTION, PARTICIPANTS, LOCATION). */
 enum class DraftStage(val wire: String) {
-    PickPastime("ACTIVITY"), WriteBlurb("DESCRIPTION"), PickSpot("LOCATION");
+    PickPastime("ACTIVITY"), WriteBlurb("DESCRIPTION"), PickHeadcount("PARTICIPANTS"), PickSpot("LOCATION");
 
     companion object {
         fun parse(raw: String): DraftStage = entries.first { it.wire == raw }
