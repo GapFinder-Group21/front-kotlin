@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -51,9 +52,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.DropOffRepository
 import co.gapfinder.mobile.data.HangoutRepository
-import co.gapfinder.mobile.data.MemberRepository
 import co.gapfinder.mobile.data.PastimeRepository
 import co.gapfinder.mobile.data.SpotRepository
 import co.gapfinder.mobile.domain.CampusSpot
@@ -84,6 +85,11 @@ import java.time.LocalDateTime
 private const val TAG = "HangoutComposer"
 private const val BLURB_LIMIT = 160
 
+// Cupo de la mesa: valor inicial y límites del selector
+private const val DEFAULT_SEATS = 4
+private const val MIN_SEATS = 2
+private const val MAX_SEATS = 20
+
 /** Hoja inferior abierta en el formulario. */
 private enum class OpenSheet { None, Pastimes, Spots }
 
@@ -102,6 +108,7 @@ fun HangoutComposerPage() {
     var chosenPastime by remember { mutableStateOf<Pastime?>(null) }
     var chosenSpot by remember { mutableStateOf<CampusSpot?>(null) }
     var minutes by remember { mutableIntStateOf(0) }
+    var seats by remember { mutableIntStateOf(DEFAULT_SEATS) }
     var blurb by remember { mutableStateOf("") }
     val tracker = remember { DraftTracker() }
 
@@ -123,16 +130,6 @@ fun HangoutComposerPage() {
             }
             pastimes = fetchedPastimes
             spots = fetchedSpots
-
-            // Edificio actual por separado
-            try {
-                val me = SessionVault.memberId()
-                chosenSpot = if (me == null) null else MemberRepository.byId(me).currentSpot
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.d(TAG, "Note: Current building not auto-detected: $e")
-            }
 
             if (fetchedPastimes.isNotEmpty()) {
                 chosenPastime = fetchedPastimes.first()
@@ -164,14 +161,17 @@ fun HangoutComposerPage() {
                 val now = LocalDateTime.now()
                 val draft = Hangout(
                     id = 0,
+                    title = pastime.name,
                     description = blurb.trim(),
                     startsAt = now,
                     endsAt = now.plusMinutes(minutes.toLong()),
-                    state = HangoutState.Running,
-                    createdAt = now,
+                    maxParticipants = seats,
+                    state = HangoutState.Open,
                     pastime = pastime,
                 )
-                HangoutRepository.host(hostId = me, spotId = spot.id, durationMinutes = minutes, draft = draft)
+                val created = HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft)
+                // El creador también queda registrado como participante
+                AttendeeRepository.join(created.id, me)
                 StackNavigator.back()
             } catch (e: CancellationException) {
                 throw e
@@ -196,7 +196,8 @@ fun HangoutComposerPage() {
                     stage = stage,
                     pastimeId = chosenPastime?.id,
                     durationMinutes = if (chosenPastime != null && minutes > 0) minutes else null,
-                    // El backend solo acepta edificio si el abandono fue en LOCATION
+                    // Cupo y edificio solo se mandan si el abandono fue justo en ese paso
+                    maxParticipants = if (stage == DraftStage.PickHeadcount) seats else null,
                     spotId = if (stage == DraftStage.PickSpot) chosenSpot?.id else null,
                 )
                 GlobalScope.launch {
@@ -209,6 +210,11 @@ fun HangoutComposerPage() {
             }
             StackNavigator.back()
         }
+    }
+
+    fun changeSeats(delta: Int) {
+        tracker.stage = DraftStage.PickHeadcount
+        seats = (seats + delta).coerceIn(MIN_SEATS, MAX_SEATS)
     }
 
     when {
@@ -269,7 +275,7 @@ fun HangoutComposerPage() {
                     // Actividad
                     PickerField(
                         heading = "Activity",
-                        shown = chosenPastime?.title ?: "Select an activity",
+                        shown = chosenPastime?.name ?: "Select an activity",
                         hint = chosenPastime?.let { "${it.durationMinutes} min" },
                         onOpen = {
                             tracker.stage = DraftStage.PickPastime
@@ -291,6 +297,28 @@ fun HangoutComposerPage() {
                             Text(
                                 text = "${blurb.length}/$BLURB_LIMIT",
                                 style = Typo.paragraph().copy(fontSize = 11.sp, color = Palette.Ink.fade(0.3f)),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Cupo máximo
+                    CardSection(heading = "Max participants") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            StepButton(
+                                glyph = Glyphs.removeCircleOutline,
+                                enabled = seats > MIN_SEATS,
+                                onTap = { changeSeats(-1) },
+                            )
+                            Text(
+                                text = "$seats",
+                                style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 16.sp, color = Palette.Ink),
+                            )
+                            StepButton(
+                                glyph = Glyphs.addCircleOutline,
+                                enabled = seats < MAX_SEATS,
+                                onTap = { changeSeats(+1) },
                             )
                         }
                     }
@@ -333,7 +361,7 @@ fun HangoutComposerPage() {
             rows = pastimes,
             isChosen = { it.id == chosenPastime?.id },
             accent = Palette.Sky,
-            titleOf = { it.title },
+            titleOf = { it.name },
             detailOf = { "${it.durationMinutes} minutes · ${it.energy.wire.lowercase()}" },
             onPick = {
                 chosenPastime = it
@@ -416,6 +444,25 @@ private fun PickerField(heading: String, shown: String, hint: String?, onOpen: (
                 modifier = Modifier.size(20.dp),
             )
         }
+    }
+}
+
+/** Botón − / + del cupo (IconButton de M3: ícono de 24 en un área táctil de 48). */
+@Composable
+private fun StepButton(glyph: ImageVector, enabled: Boolean, onTap: () -> Unit) {
+    Box(
+        Modifier
+            .size(48.dp)
+            .inkTap(CircleShape, enabled = enabled) { onTap() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            glyph,
+            contentDescription = null,
+            // onSurfaceVariant, o onSurface al 38% cuando está deshabilitado
+            tint = if (enabled) Color(0xFF49454F) else SurfaceText.fade(0.38f),
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
