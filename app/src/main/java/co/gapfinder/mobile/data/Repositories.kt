@@ -1,7 +1,10 @@
 package co.gapfinder.mobile.data
 
 import android.util.Log
+import co.gapfinder.mobile.domain.Bond
+import co.gapfinder.mobile.domain.BondState
 import co.gapfinder.mobile.domain.CampusSpot
+import co.gapfinder.mobile.domain.Crew
 import co.gapfinder.mobile.domain.EnergyLevel
 import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Hobby
@@ -289,4 +292,91 @@ object CalendarBridge {
         HttpGateway.send("/google/import-schedule").expect(200, "Error al importar el horario")
         return true
     }
+}
+
+// ============================================================ Amistades
+
+object BondRepository {
+    /** GET /friendships — las de todos los usuarios. */
+    suspend fun all(): List<Bond> =
+        HttpGateway.fetch("/friendships").expectOrExplain(200, "Error getting friendships").many(Bond::decode)
+
+    suspend fun byId(id: Int): Bond =
+        Bond.decode(HttpGateway.fetch("/friendships/$id").expectOrExplain(200, "Error getting friendship").json)
+
+    /** GET /friendships/user/{userId}/friends — amigos ya aceptados. */
+    suspend fun friendsOf(memberId: Int): List<Member> =
+        HttpGateway.fetch("/friendships/user/$memberId/friends")
+            .expectOrExplain(200, "Error getting friends").many(Member::decode)
+
+    /** Solicitudes pendientes que recibió el usuario. Se filtran aquí porque GET /friendships trae las de todos. */
+    suspend fun incomingFor(memberId: Int): List<Bond> =
+        all().filter { it.receiverId == memberId && it.state == BondState.Waiting }
+
+    /** POST /friendships — el backend la crea en PENDING. */
+    suspend fun request(requesterId: Int, receiverId: Int): Bond =
+        Bond.decode(
+            HttpGateway.send("/friendships", jsonOf("requesterId" to requesterId, "receiverId" to receiverId))
+                .expectOrExplain(201, "Error sending friend request").json
+        )
+
+    /** PATCH /friendships/{id}/accept?userId= */
+    suspend fun approve(id: Int, memberId: Int): Bond =
+        Bond.decode(HttpGateway.tweak("/friendships/$id/accept?userId=$memberId")
+            .expectOrExplain(200, "Error accepting friend request").json)
+
+    /** PATCH /friendships/{id}/reject?userId= */
+    suspend fun decline(id: Int, memberId: Int): Bond =
+        Bond.decode(HttpGateway.tweak("/friendships/$id/reject?userId=$memberId")
+            .expectOrExplain(200, "Error rejecting friend request").json)
+
+    suspend fun dissolve(id: Int) {
+        HttpGateway.erase("/friendships/$id").expectOrExplain(204, "Error deleting friendship")
+    }
+}
+
+// ============================================================ Amigos cercanos
+
+object NearbyRepository {
+    /** GET /nearby-friends/user/{userId} — amigos que están ahora en el mismo edificio. */
+    suspend fun friendsNear(memberId: Int): List<Member> =
+        HttpGateway.fetch("/nearby-friends/user/$memberId").expect(200, "Error getting nearby friends").many(Member::decode)
+
+    /** PUT /nearby-friends/user/{userId}/location — actualiza la ubicación por GPS y devuelve los amigos cercanos. */
+    suspend fun moveTo(memberId: Int, latitude: Double, longitude: Double): List<Member> =
+        HttpGateway.overwrite("/nearby-friends/user/$memberId/location?latitude=$latitude&longitude=$longitude")
+            .expect(200, "Error updating location by coordinates").many(Member::decode)
+
+    /** PUT /nearby-friends/user/{userId}/building/{buildingId} — fija el edificio directamente. */
+    suspend fun moveToSpot(memberId: Int, spotId: Int): List<Member> =
+        HttpGateway.overwrite("/nearby-friends/user/$memberId/building/$spotId")
+            .expect(200, "Error updating location by building").many(Member::decode)
+}
+
+// ============================================================ Grupos
+
+object CrewRepository {
+    suspend fun all(): List<Crew> =
+        HttpGateway.fetch("/groups").expect(200, "Error getting groups").many(Crew::decode)
+
+    suspend fun of(memberId: Int): List<Crew> =
+        HttpGateway.fetch("/groups/user?userId=$memberId").expect(200, "Error getting user groups").many(Crew::decode)
+
+    suspend fun byId(id: Int): Crew =
+        Crew.decode(HttpGateway.fetch("/groups/$id").expect(200, "Error getting group").json)
+
+    suspend fun found(founderId: Int, crew: Crew): Crew =
+        Crew.decode(HttpGateway.send("/groups?creatorId=$founderId", crew.encode()).expect(201, "Error creating group").json)
+
+    suspend fun edit(id: Int, crew: Crew): Crew =
+        Crew.decode(HttpGateway.overwrite("/groups/$id", crew.encode()).expect(200, "Error updating group").json)
+
+    suspend fun disband(id: Int) {
+        HttpGateway.erase("/groups/$id").expect(204, "Error deleting group")
+    }
+
+    /** POST /groups/{id}/members — agrega a un amigo como miembro. */
+    suspend fun enlist(id: Int, requesterId: Int, newMemberId: Int): Crew =
+        Crew.decode(HttpGateway.send("/groups/$id/members?requesterId=$requesterId&newMemberId=$newMemberId")
+            .expect(200, "Error adding member").json)
 }
