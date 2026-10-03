@@ -3,10 +3,13 @@ package co.gapfinder.mobile.data
 import android.util.Log
 import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.EnergyLevel
+import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Hobby
+import co.gapfinder.mobile.domain.Lecture
 import co.gapfinder.mobile.domain.LoginTicket
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.Pastime
+import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.HttpGateway
 import co.gapfinder.mobile.foundation.Reply
 import co.gapfinder.mobile.foundation.ServerFault
@@ -16,6 +19,7 @@ import co.gapfinder.mobile.foundation.jsonOf
 import co.gapfinder.mobile.foundation.mapNodes
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.time.LocalDate
 
 private const val TAG = "Repo"
 
@@ -207,5 +211,82 @@ object SpotRepository {
 
     suspend fun drop(id: Int) {
         HttpGateway.erase("/buildings/$id").expectOrExplain(204, "Error deleting building")
+    }
+}
+
+// ============================================================ Horario (bloques de clase)
+
+object LectureRepository {
+    suspend fun byId(id: Int): Lecture =
+        Lecture.decode(HttpGateway.fetch("/class-blocks/$id").expect(200, "Error getting class block").json)
+
+    /** GET /class-blocks/user/{userId} */
+    suspend fun timetableOf(memberId: Int): List<Lecture> =
+        HttpGateway.fetch("/class-blocks/user/$memberId").expect(200, "Error getting schedule").many(Lecture::decode)
+
+    suspend fun addTo(memberId: Int, lecture: Lecture): Lecture =
+        Lecture.decode(HttpGateway.send("/class-blocks/user/$memberId", lecture.encode())
+            .expect(201, "Error creating class block").json)
+
+    suspend fun edit(id: Int, lecture: Lecture): Lecture =
+        Lecture.decode(HttpGateway.overwrite("/class-blocks/$id", lecture.encode())
+            .expect(200, "Error updating class block").json)
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/class-blocks/$id").expect(204, "Error deleting class block")
+    }
+}
+
+// ============================================================ Huecos (gaps)
+
+object WindowRepository {
+    /** GET /gaps — los de todos los usuarios. */
+    suspend fun all(): List<FreeWindow> =
+        HttpGateway.fetch("/gaps").expectOrExplain(200, "Error getting gaps").many(FreeWindow::decode)
+
+    suspend fun byId(id: Int): FreeWindow =
+        FreeWindow.decode(HttpGateway.fetch("/gaps/$id").expectOrExplain(200, "Error getting gap").json)
+
+    /** GET /gaps/user/{userId} — huecos de la semana del usuario (la actual si no se pasa weekStart). */
+    suspend fun weekOf(memberId: Int, weekStart: LocalDate? = null): List<FreeWindow> {
+        val query = weekStart?.let { "?weekStart=${Chrono.isoDay(it)}" } ?: ""
+        return HttpGateway.fetch("/gaps/user/$memberId$query").expect(200, "Error getting user gaps").many(FreeWindow::decode)
+    }
+
+    /**
+     * POST /gaps/user/{userId}/generate-week — calcula y guarda los huecos de la semana a partir del horario.
+     * weekStart debe ser lunes; si se omite, el backend usa la semana actual (o la siguiente si hoy es domingo).
+     */
+    suspend fun generateWeek(memberId: Int, weekStart: LocalDate? = null): List<FreeWindow> {
+        val query = weekStart?.let { "?weekStart=${Chrono.isoDay(it)}" } ?: ""
+        return HttpGateway.send("/gaps/user/$memberId/generate-week$query")
+            .expectOrExplain(201, "Error generating week gaps").many(FreeWindow::decode)
+    }
+
+    suspend fun add(memberId: Int, window: FreeWindow): FreeWindow =
+        FreeWindow.decode(HttpGateway.send("/gaps", window.ownedBy(memberId)).expectOrExplain(201, "Error creating gap").json)
+
+    suspend fun edit(id: Int, memberId: Int, window: FreeWindow): FreeWindow =
+        FreeWindow.decode(HttpGateway.overwrite("/gaps/$id", window.ownedBy(memberId)).expectOrExplain(200, "Error updating gap").json)
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/gaps/$id").expectOrExplain(204, "Error deleting gap")
+    }
+
+    /** El dueño va plano (userId), como lo lee GapBasicDTO. */
+    private fun FreeWindow.ownedBy(memberId: Int): JSONObject = encode().put("userId", memberId)
+}
+
+// ============================================================ Google Calendar
+
+object CalendarBridge {
+    /** GET /google/auth-url */
+    suspend fun authorizationLink(): String =
+        HttpGateway.fetch("/google/auth-url").expect(200, "Error al obtener la URL de Google").json.getString("url")
+
+    /** POST /google/import-schedule */
+    suspend fun pullTimetable(): Boolean {
+        HttpGateway.send("/google/import-schedule").expect(200, "Error al importar el horario")
+        return true
     }
 }
