@@ -1,8 +1,12 @@
 package co.gapfinder.mobile.data
 
+import android.util.Log
+import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.EnergyLevel
+import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.LoginTicket
 import co.gapfinder.mobile.domain.Member
+import co.gapfinder.mobile.domain.Pastime
 import co.gapfinder.mobile.foundation.HttpGateway
 import co.gapfinder.mobile.foundation.Reply
 import co.gapfinder.mobile.foundation.ServerFault
@@ -13,10 +17,28 @@ import co.gapfinder.mobile.foundation.mapNodes
 import org.json.JSONObject
 import java.net.URLEncoder
 
+private const val TAG = "Repo"
+
 private fun encodeParam(value: String): String =
     URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
 private inline fun <T> Reply.many(mapper: (JSONObject) -> T): List<T> = jsonList.mapNodes(mapper)
+
+/**
+ * Como [expect], pero el error lleva el mensaje del backend cuando lo manda:
+ * texto plano (400/404/409) o JSON {"error": "..."}.
+ */
+private fun Reply.expectOrExplain(code: Int, fallback: String): Reply {
+    if (this.code == code) return this
+    val body = text.trim()
+    if (body.isEmpty()) throw ServerFault("$fallback: ${this.code}")
+    val explained = try {
+        JSONObject(body).takeIf { it.has("error") && !it.isNull("error") }?.get("error")?.toString()
+    } catch (ignored: Exception) {
+        null // no es JSON, es texto plano
+    }
+    throw ServerFault(explained ?: body)
+}
 
 // ============================================================ Cuenta / autenticación
 
@@ -114,4 +136,76 @@ object MemberRepository {
     suspend fun searchByName(name: String): List<Member> =
         HttpGateway.fetch("/users/search?name=${encodeParam(name)}")
             .expect(200, "Error searching users").many(Member::decode)
+}
+
+// ============================================================ Intereses
+
+object HobbyRepository {
+    suspend fun all(): List<Hobby> =
+        HttpGateway.fetch("/interests").expectOrExplain(200, "Error getting interests").many(Hobby::decode)
+
+    suspend fun byId(id: Int): Hobby =
+        Hobby.decode(HttpGateway.fetch("/interests/$id").expectOrExplain(200, "Error getting interest").json)
+
+    /** El nombre es obligatorio y único. */
+    suspend fun add(hobby: Hobby): Hobby =
+        Hobby.decode(HttpGateway.send("/interests", hobby.encode()).expectOrExplain(201, "Error creating interest").json)
+
+    suspend fun edit(id: Int, hobby: Hobby): Hobby =
+        Hobby.decode(HttpGateway.overwrite("/interests/$id", hobby.encode()).expectOrExplain(200, "Error updating interest").json)
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/interests/$id").expectOrExplain(204, "Error deleting interest")
+    }
+}
+
+// ============================================================ Actividades
+
+object PastimeRepository {
+    /** GET /activities */
+    suspend fun catalog(): List<Pastime> {
+        val reply = HttpGateway.fetch("/activities")
+        Log.d(TAG, "API RESPONSE [/activities]: ${reply.code} - ${reply.text}")
+        return reply.expect(200, "Error getting activities").many(Pastime::decode)
+    }
+
+    suspend fun byId(id: Int): Pastime =
+        Pastime.decode(HttpGateway.fetch("/activities/$id").expect(200, "Error getting activity").json)
+
+    suspend fun publish(pastime: Pastime): Pastime =
+        Pastime.decode(HttpGateway.send("/activities", pastime.encode()).expect(201, "Error creating activity").json)
+
+    suspend fun edit(id: Int, pastime: Pastime): Pastime =
+        Pastime.decode(HttpGateway.overwrite("/activities/$id", pastime.encode()).expect(200, "Error updating activity").json)
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/activities/$id").expect(204, "Error deleting activity")
+    }
+}
+
+// ============================================================ Edificios
+
+object SpotRepository {
+    suspend fun all(): List<CampusSpot> =
+        HttpGateway.fetch("/buildings").expectOrExplain(200, "Error getting buildings").many(CampusSpot::decode)
+
+    suspend fun byId(id: Int): CampusSpot =
+        CampusSpot.decode(HttpGateway.fetch("/buildings/$id").expectOrExplain(200, "Error getting building").json)
+
+    /** GET /buildings/locate — edificio que contiene esas coordenadas; null si el punto queda fuera de todos (404). */
+    suspend fun locate(latitude: Double, longitude: Double): CampusSpot? {
+        val reply = HttpGateway.fetch("/buildings/locate?latitude=$latitude&longitude=$longitude")
+        if (reply.code == 404) return null
+        return CampusSpot.decode(reply.expectOrExplain(200, "Error locating building").json)
+    }
+
+    suspend fun add(spot: CampusSpot): CampusSpot =
+        CampusSpot.decode(HttpGateway.send("/buildings", spot.encode()).expectOrExplain(201, "Error creating building").json)
+
+    suspend fun edit(id: Int, spot: CampusSpot): CampusSpot =
+        CampusSpot.decode(HttpGateway.overwrite("/buildings/$id", spot.encode()).expectOrExplain(200, "Error updating building").json)
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/buildings/$id").expectOrExplain(204, "Error deleting building")
+    }
 }
