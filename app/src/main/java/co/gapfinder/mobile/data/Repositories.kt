@@ -1,9 +1,11 @@
 package co.gapfinder.mobile.data
 
 import android.util.Log
+import co.gapfinder.mobile.domain.Alert
 import co.gapfinder.mobile.domain.Bond
 import co.gapfinder.mobile.domain.BondState
 import co.gapfinder.mobile.domain.CampusSpot
+import co.gapfinder.mobile.domain.ChatLine
 import co.gapfinder.mobile.domain.Crew
 import co.gapfinder.mobile.domain.EnergyLevel
 import co.gapfinder.mobile.domain.FreeWindow
@@ -11,6 +13,10 @@ import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.Lecture
 import co.gapfinder.mobile.domain.LoginTicket
 import co.gapfinder.mobile.domain.Member
+import co.gapfinder.mobile.domain.Pairing
+import co.gapfinder.mobile.domain.PairingFocus
+import co.gapfinder.mobile.domain.PairingProspect
+import co.gapfinder.mobile.domain.PairingState
 import co.gapfinder.mobile.domain.Pastime
 import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.HttpGateway
@@ -379,4 +385,101 @@ object CrewRepository {
     suspend fun enlist(id: Int, requesterId: Int, newMemberId: Int): Crew =
         Crew.decode(HttpGateway.send("/groups/$id/members?requesterId=$requesterId&newMemberId=$newMemberId")
             .expect(200, "Error adding member").json)
+}
+
+// ============================================================ Matches
+
+object PairingRepository {
+    /** GET /matches/gap/{gapId}/candidates — candidatos para un hueco, priorizados según el modo. */
+    suspend fun prospects(windowId: Int, focus: PairingFocus): List<PairingProspect> =
+        HttpGateway.fetch(
+            "/matches/gap/$windowId/candidates" +
+                "?useSameCareer=${focus == PairingFocus.Career}" +
+                "&useSharedInterests=${focus == PairingFocus.Interests}" +
+                "&useEffort=${focus == PairingFocus.Energy}"
+        ).expectOrExplain(200, "Error getting candidates").many(PairingProspect::decode)
+
+    /** POST /matches/request — el score debe ser el que devolvió [prospects]. */
+    suspend fun propose(proposerWindowId: Int, acceptorWindowId: Int, score: Double): Pairing =
+        Pairing.decode(
+            HttpGateway.send("/matches/request?proposerGapId=$proposerWindowId&acceptorGapId=$acceptorWindowId&score=$score")
+                .expectOrExplain(201, "Error sending match request").json
+        )
+
+    suspend fun all(): List<Pairing> =
+        HttpGateway.fetch("/matches").expectOrExplain(200, "Error getting matches").many(Pairing::decode)
+
+    suspend fun byId(id: Int): Pairing =
+        Pairing.decode(HttpGateway.fetch("/matches/$id").expectOrExplain(200, "Error getting match").json)
+
+    /** GET /matches/user/{userId}/pending — solicitudes que recibió el usuario. */
+    suspend fun incomingFor(memberId: Int): List<Pairing> =
+        HttpGateway.fetch("/matches/user/$memberId/pending")
+            .expectOrExplain(200, "Error getting pending matches").many(Pairing::decode)
+
+    /** PATCH /matches/{id}/accept?userId= */
+    suspend fun approve(id: Int, memberId: Int): Pairing =
+        Pairing.decode(HttpGateway.tweak("/matches/$id/accept?userId=$memberId")
+            .expectOrExplain(200, "Error accepting match").json)
+
+    /** PATCH /matches/{id}/reject?userId= */
+    suspend fun decline(id: Int, memberId: Int): Pairing =
+        Pairing.decode(HttpGateway.tweak("/matches/$id/reject?userId=$memberId")
+            .expectOrExplain(200, "Error rejecting match").json)
+
+    /** PATCH /matches/{id}/complete — marca como terminado un match aceptado. */
+    suspend fun complete(id: Int): Pairing =
+        Pairing.decode(HttpGateway.tweak("/matches/$id/complete").expectOrExplain(200, "Error completing match").json)
+
+    /** Match aceptado (ACCEPTED) en el que participa el usuario, si existe. */
+    suspend fun ongoingFor(memberId: Int): Pairing? =
+        all().firstOrNull { it.involves(memberId) && it.state == PairingState.Live }
+}
+
+// ============================================================ Mensajes
+
+object ChatLineRepository {
+    /** POST /messages?senderId=...&matchId=...&openTableId=...&content=... */
+    suspend fun post(senderId: Int, pairingId: Int? = null, hangoutId: Int? = null, content: String): ChatLine {
+        val query = buildList {
+            add("senderId=$senderId")
+            pairingId?.let { add("matchId=$it") }
+            hangoutId?.let { add("openTableId=$it") }
+            add("content=${encodeParam(content)}")
+        }.joinToString("&")
+        return ChatLine.decode(HttpGateway.send("/messages?$query").expect(201, "Error sending message").json)
+    }
+
+    suspend fun forPairing(pairingId: Int): List<ChatLine> =
+        HttpGateway.fetch("/messages/match/$pairingId").expect(200, "Error getting match messages").many(ChatLine::decode)
+
+    suspend fun forHangout(hangoutId: Int): List<ChatLine> =
+        HttpGateway.fetch("/messages/opentable/$hangoutId").expect(200, "Error getting open table messages").many(ChatLine::decode)
+
+    suspend fun byId(id: Int): ChatLine =
+        ChatLine.decode(HttpGateway.fetch("/messages/$id").expect(200, "Error getting message").json)
+}
+
+// ============================================================ Notificaciones
+
+object AlertRepository {
+    /** GET /api/notifications/user/{userId} */
+    suspend fun inboxOf(memberId: Int): List<Alert> =
+        HttpGateway.fetch("/api/notifications/user/$memberId").expect(200, "Error getting notifications").many(Alert::decode)
+
+    /** GET /api/notifications/user/{userId}/unread */
+    suspend fun unseenOf(memberId: Int): List<Alert> =
+        HttpGateway.fetch("/api/notifications/user/$memberId/unread")
+            .expect(200, "Error getting unread notifications").many(Alert::decode)
+
+    /** PUT /api/notifications/{notificationId}/read?userId= */
+    suspend fun markSeen(id: Int, memberId: Int): Alert =
+        Alert.decode(HttpGateway.overwrite("/api/notifications/$id/read?userId=$memberId")
+            .expect(200, "Error marking notification as read").json)
+
+    /** PUT /api/notifications/user/{userId}/read-all */
+    suspend fun markAllSeen(memberId: Int) {
+        val reply = HttpGateway.overwrite("/api/notifications/user/$memberId/read-all")
+        if (reply.code != 204 && reply.code != 200) throw ServerFault("Error marking all as read: ${reply.code}")
+    }
 }
