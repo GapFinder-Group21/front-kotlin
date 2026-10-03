@@ -7,10 +7,15 @@ import co.gapfinder.mobile.domain.BondState
 import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.ChatLine
 import co.gapfinder.mobile.domain.Crew
+import co.gapfinder.mobile.domain.DropOffStat
 import co.gapfinder.mobile.domain.EnergyLevel
 import co.gapfinder.mobile.domain.FreeWindow
+import co.gapfinder.mobile.domain.Hangout
+import co.gapfinder.mobile.domain.HangoutAttendee
+import co.gapfinder.mobile.domain.HangoutDropOff
 import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.Lecture
+import co.gapfinder.mobile.domain.LocationPing
 import co.gapfinder.mobile.domain.LoginTicket
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.Pairing
@@ -18,17 +23,22 @@ import co.gapfinder.mobile.domain.PairingFocus
 import co.gapfinder.mobile.domain.PairingProspect
 import co.gapfinder.mobile.domain.PairingState
 import co.gapfinder.mobile.domain.Pastime
+import co.gapfinder.mobile.domain.Recommendation
+import co.gapfinder.mobile.domain.SpotDwell
 import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.HttpGateway
 import co.gapfinder.mobile.foundation.Reply
 import co.gapfinder.mobile.foundation.ServerFault
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.expect
+import co.gapfinder.mobile.foundation.isBlankPayload
 import co.gapfinder.mobile.foundation.jsonOf
 import co.gapfinder.mobile.foundation.mapNodes
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 private const val TAG = "Repo"
 
@@ -36,6 +46,9 @@ private fun encodeParam(value: String): String =
     URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
 private inline fun <T> Reply.many(mapper: (JSONObject) -> T): List<T> = jsonList.mapNodes(mapper)
+
+private inline fun <T> Reply.oneOrNull(mapper: (JSONObject) -> T): T? =
+    if (text.isBlankPayload()) null else mapper(json)
 
 /**
  * Como [expect], pero el error lleva el mensaje del backend cuando lo manda:
@@ -482,4 +495,130 @@ object AlertRepository {
         val reply = HttpGateway.overwrite("/api/notifications/user/$memberId/read-all")
         if (reply.code != 204 && reply.code != 200) throw ServerFault("Error marking all as read: ${reply.code}")
     }
+}
+
+// ============================================================ Mesas abiertas
+
+object HangoutRepository {
+    suspend fun byId(id: Int): Hangout =
+        Hangout.decode(HttpGateway.fetch("/open-tables/$id").expectOrExplain(200, "Error getting open table").json)
+
+    /** GET /open-tables */
+    suspend fun all(): List<Hangout> =
+        HttpGateway.fetch("/open-tables").expectOrExplain(200, "Error getting open tables").many(Hangout::decode)
+
+    /** GET /open-tables/count?since=yyyy-MM-ddTHH:mm:ss — cuántas mesas se crearon desde esa fecha. */
+    suspend fun countSince(since: LocalDateTime): Int =
+        HttpGateway.fetch("/open-tables/count?since=${since.format(PLAIN_MOMENT)}")
+            .expectOrExplain(200, "Error counting open tables").text.trim().toInt()
+
+    /**
+     * POST /open-tables — el backend exige creador, edificio, título, inicio antes del fin,
+     * cupo mayor a 0 y estado.
+     */
+    suspend fun host(hostId: Int, spotId: Int, draft: Hangout): Hangout =
+        Hangout.decode(
+            HttpGateway.send("/open-tables", draft.withRelations(hostId, spotId))
+                .expectOrExplain(201, "Error creating open table").json
+        )
+
+    suspend fun edit(id: Int, hostId: Int, spotId: Int, hangout: Hangout): Hangout =
+        Hangout.decode(
+            HttpGateway.overwrite("/open-tables/$id", hangout.withRelations(hostId, spotId))
+                .expectOrExplain(200, "Error updating open table").json
+        )
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/open-tables/$id").expectOrExplain(204, "Error deleting open table")
+    }
+
+    /** Formato de OpenTableCompleteDTO: creador y edificio anidados con su id. */
+    private fun Hangout.withRelations(hostId: Int, spotId: Int): JSONObject =
+        encode()
+            .put("creator", jsonOf("id" to hostId))
+            .put("building", jsonOf("id" to spotId))
+
+    // Sin zona ni fracciones de segundo, que es lo que acepta "since"
+    private val PLAIN_MOMENT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+}
+
+// ============================================================ Participantes de mesa
+
+object AttendeeRepository {
+    suspend fun all(): List<HangoutAttendee> =
+        HttpGateway.fetch("/open-table-participants").expect(200, "Error getting participants").many(HangoutAttendee::decode)
+
+    suspend fun byId(id: Int): HangoutAttendee =
+        HangoutAttendee.decode(HttpGateway.fetch("/open-table-participants/$id").expect(200, "Error getting participant").json)
+
+    /** GET /open-table-participants/table/{tableId} */
+    suspend fun of(hangoutId: Int): List<HangoutAttendee> =
+        HttpGateway.fetch("/open-table-participants/table/$hangoutId")
+            .expectOrExplain(200, "Error getting participants of the table").many(HangoutAttendee::decode)
+
+    /** POST /open-table-participants/table/{tableId}/join?userId= */
+    suspend fun join(hangoutId: Int, memberId: Int): HangoutAttendee =
+        HangoutAttendee.decode(
+            HttpGateway.send("/open-table-participants/table/$hangoutId/join?userId=$memberId")
+                .expectOrExplain(201, "Error joining the table").json
+        )
+
+    /** DELETE /open-table-participants/table/{tableId}/leave?userId= */
+    suspend fun leave(hangoutId: Int, memberId: Int) {
+        HttpGateway.erase("/open-table-participants/table/$hangoutId/leave?userId=$memberId")
+            .expectOrExplain(204, "Error leaving the table")
+    }
+
+    suspend fun drop(id: Int) {
+        HttpGateway.erase("/open-table-participants/$id").expect(204, "Error deleting participant")
+    }
+}
+
+// ============================================================ Abandonos del formulario de mesa
+
+object DropOffRepository {
+    suspend fun log(dropOff: HangoutDropOff) {
+        HttpGateway.send("/open-table-abandonments", dropOff.encode()).expect(201, "Error registering abandonment")
+    }
+
+    /** GET /open-table-abandonments/stats?since= — abandonos por paso desde esa fecha. */
+    suspend fun stats(since: LocalDateTime): List<DropOffStat> =
+        HttpGateway.fetch("/open-table-abandonments/stats?since=${encodeParam(Chrono.writeMoment(since))}")
+            .expect(200, "Error getting abandonment stats").many(DropOffStat::decode)
+}
+
+// ============================================================ Recomendaciones
+
+object RecommendationRepository {
+    /** GET /recommendations/user/{userId}/open-tables — mesas en el edificio que más frecuenta el usuario. */
+    suspend fun hangoutsFor(memberId: Int): Recommendation {
+        val reply = HttpGateway.fetch("/recommendations/user/$memberId/open-tables")
+        Log.d(TAG, "REC userId=$memberId status=${reply.code} body=${reply.text}")
+        return Recommendation.decode(reply.expect(200, "Error getting recommendations").json)
+    }
+}
+
+// ============================================================ Registros de ubicación
+
+object PingRepository {
+    suspend fun record(memberId: Int, windowId: Int, latitude: Double, longitude: Double): LocationPing =
+        LocationPing.decode(
+            HttpGateway.send("/user-location-logs?userId=$memberId&gapId=$windowId&latitude=$latitude&longitude=$longitude")
+                .expect(201, "Error creating checkpoint").json
+        )
+
+    suspend fun trail(windowId: Int): List<LocationPing> =
+        HttpGateway.fetch("/user-location-logs/gap/$windowId").expect(200, "Error getting checkpoints").many(LocationPing::decode)
+
+    suspend fun dwellPerSpot(windowId: Int): List<SpotDwell> =
+        HttpGateway.fetch("/user-location-logs/gap/$windowId/time-per-building")
+            .expect(200, "Error getting time per building").many(SpotDwell::decode)
+
+    suspend fun favoriteSpot(memberId: Int): CampusSpot? =
+        HttpGateway.fetch("/user-location-logs/user/$memberId/favorite-building")
+            .expect(200, "Error getting favorite building").oneOrNull(CampusSpot::decode)
+
+    suspend fun topSpot(windowId: Int): CampusSpot? =
+        HttpGateway.fetch("/user-location-logs/gap/$windowId/top-building")
+            .expect(200, "Error getting top building").oneOrNull(CampusSpot::decode)
 }
