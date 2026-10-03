@@ -12,6 +12,7 @@ import co.gapfinder.mobile.screens.hangouts.HangoutDetailPage
 import co.gapfinder.mobile.screens.hangouts.MyHangoutsPage
 import co.gapfinder.mobile.screens.home.HomeShell
 import co.gapfinder.mobile.screens.home.TimetableTab
+import co.gapfinder.mobile.screens.home.WindowDetailPage
 import co.gapfinder.mobile.screens.onboarding.CalendarImportPage
 import co.gapfinder.mobile.screens.onboarding.CalendarLinkPage
 import co.gapfinder.mobile.screens.onboarding.HobbyPickerPage
@@ -20,7 +21,6 @@ import co.gapfinder.mobile.screens.onboarding.LocationGatePage
 import co.gapfinder.mobile.screens.onboarding.SignInPage
 import co.gapfinder.mobile.screens.onboarding.SignUpPage
 import co.gapfinder.mobile.screens.onboarding.TimetableSetupPage
-import co.gapfinder.mobile.screens.pairing.ConversationPage
 import co.gapfinder.mobile.screens.pairing.PairingCandidatePage
 import co.gapfinder.mobile.screens.pairing.PairingConfirmedPage
 import co.gapfinder.mobile.screens.pairing.PairingInvitePage
@@ -75,10 +75,8 @@ private fun Render(destination: Destination) {
         is Destination.PairingSearch -> PairingSearchPage(destination.memberId, destination.focus)
         is Destination.PairingCandidate -> PairingCandidatePage(
             memberId = destination.memberId,
-            candidate = destination.candidate,
-            candidateWindow = destination.candidateWindow,
-            affinity = destination.affinity,
-            sharedHobbies = destination.sharedHobbies,
+            currentWindowId = destination.currentWindowId,
+            prospect = destination.prospect,
         )
         is Destination.PairingPending -> PairingPendingPage(destination.pairingId, destination.requesterId, destination.candidate)
         is Destination.PairingConfirmed -> PairingConfirmedPage(
@@ -88,10 +86,10 @@ private fun Render(destination: Destination) {
             chosen = destination.chosen,
         )
         is Destination.PairingInvite -> PairingInvitePage(destination.pairingId)
-        is Destination.Conversation -> ConversationPage(destination.pairingId, destination.hangoutId)
         Destination.HangoutComposer -> HangoutComposerPage()
         Destination.MyHangouts -> MyHangoutsPage()
         is Destination.HangoutDetail -> HangoutDetailPage(destination.hangoutId)
+        is Destination.WindowDetail -> WindowDetailPage(destination.windowId)
         is Destination.Unmapped -> Unit
     }
 }
