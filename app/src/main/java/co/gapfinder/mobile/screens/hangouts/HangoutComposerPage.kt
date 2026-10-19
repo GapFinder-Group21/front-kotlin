@@ -45,6 +45,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,8 +141,9 @@ fun HangoutComposerPage() {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Archivo donde la cámara está escribiendo la foto (null si no hay captura en curso)
-    var capturing by remember { mutableStateOf<File?>(null) }
+    // Archivo donde la cámara está escribiendo la foto (null si no hay captura en curso).
+    // rememberSaveable porque Android puede matar la app mientras la cámara está abierta.
+    var capturing by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Normaliza la foto (JPEG reducido y derecho) y reemplaza la anterior
     fun adoptPhoto(source: Uri, leftover: File? = null) {
@@ -162,7 +164,7 @@ fun HangoutComposerPage() {
     }
 
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        val target = capturing
+        val target = capturing?.let(::File)
         capturing = null
         if (saved && target != null) adoptPhoto(Uri.fromFile(target), leftover = target) else HangoutPhotos.discard(target)
     }
@@ -172,7 +174,7 @@ fun HangoutComposerPage() {
 
     fun openCamera() {
         val (file, uri) = HangoutPhotos.cameraTarget(context)
-        capturing = file
+        capturing = file.absolutePath
         camera.launch(uri)
     }
 
