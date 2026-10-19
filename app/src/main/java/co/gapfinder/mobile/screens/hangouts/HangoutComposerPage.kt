@@ -65,6 +65,8 @@ import co.gapfinder.mobile.data.HangoutPhotos
 import co.gapfinder.mobile.data.HangoutRepository
 import co.gapfinder.mobile.data.PastimeRepository
 import co.gapfinder.mobile.data.SpotRepository
+import co.gapfinder.mobile.data.local.HangoutDraftEntity
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.DraftStage
 import co.gapfinder.mobile.domain.Hangout
@@ -88,6 +90,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDateTime
@@ -100,6 +103,9 @@ private const val DEFAULT_SEATS = 4
 private const val MIN_SEATS = 2
 private const val MAX_SEATS = 20
 
+// Espera desde el último cambio antes de guardar el borrador (no se escribe en Room por cada tecla)
+private const val DRAFT_SAVE_DELAY_MS = 400L
+
 /** Hoja inferior abierta en el formulario. */
 private enum class OpenSheet { None, Pastimes, Spots }
 
@@ -107,6 +113,8 @@ private enum class OpenSheet { None, Pastimes, Spots }
 private class DraftTracker {
     var stage: DraftStage = DraftStage.PickPastime
     var reported: Boolean = false
+    // true al publicar o cancelar: desde ahí el borrador ya no se vuelve a guardar
+    var closed: Boolean = false
 }
 
 /** Formulario para publicar una mesa abierta (antes CreateOpenTableScreen). */
@@ -123,6 +131,8 @@ fun HangoutComposerPage() {
     var photo by remember { mutableStateOf<File?>(null) }
     val tracker = remember { DraftTracker() }
 
+    // false hasta que se carga el catálogo y se restaura el borrador; antes no se guarda nada
+    var restored by remember { mutableStateOf(false) }
     var warming by remember { mutableStateOf(true) }
     var sending by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -179,10 +189,23 @@ fun HangoutComposerPage() {
             pastimes = fetchedPastimes
             spots = fetchedSpots
 
-            if (fetchedPastimes.isNotEmpty()) {
+            val saved = SessionVault.memberId()?.let { LocalStore.draftOf(it) }
+            if (saved != null) {
+                // Actividad y edificio se buscan por id; si ya no están en el catálogo quedan sin elegir
+                val pastime = fetchedPastimes.firstOrNull { it.id == saved.pastimeId } ?: fetchedPastimes.firstOrNull()
+                chosenPastime = pastime
+                minutes = if (pastime != null && pastime.id == saved.pastimeId) saved.minutes else pastime?.durationMinutes ?: 0
+                blurb = saved.blurb
+                seats = saved.seats.coerceIn(MIN_SEATS, MAX_SEATS)
+                chosenSpot = fetchedSpots.firstOrNull { it.id == saved.spotId }
+                photo = saved.photoPath?.let(::File)?.takeIf { it.exists() }
+                tracker.stage = DraftStage.entries.firstOrNull { it.wire == saved.stage } ?: DraftStage.PickPastime
+                Toaster.show("Draft restored")
+            } else if (fetchedPastimes.isNotEmpty()) {
                 chosenPastime = fetchedPastimes.first()
                 minutes = fetchedPastimes.first().durationMinutes
             }
+            restored = true
             warming = false
         } catch (e: CancellationException) {
             throw e
@@ -194,6 +217,33 @@ fun HangoutComposerPage() {
     }
 
     LaunchedEffect(Unit) { fetchCatalogs() }
+
+    // Guarda el borrador en Room con cada cambio. El efecto se reinicia con cada cambio, así que
+    // el delay hace de debounce: solo se escribe cuando el usuario se detiene un momento.
+    LaunchedEffect(restored, chosenPastime, chosenSpot, minutes, seats, blurb, photo) {
+        if (!restored || tracker.closed) return@LaunchedEffect
+        delay(DRAFT_SAVE_DELAY_MS)
+        val me = SessionVault.memberId() ?: return@LaunchedEffect
+        val untouched = chosenPastime?.id == pastimes.firstOrNull()?.id && chosenSpot == null &&
+            blurb.isBlank() && seats == DEFAULT_SEATS && photo == null
+        if (untouched) {
+            LocalStore.discardDraft(me)
+        } else {
+            LocalStore.saveDraft(
+                HangoutDraftEntity(
+                    memberId = me,
+                    pastimeId = chosenPastime?.id,
+                    minutes = minutes,
+                    blurb = blurb,
+                    seats = seats,
+                    spotId = chosenSpot?.id,
+                    photoPath = photo?.absolutePath,
+                    stage = tracker.stage.wire,
+                    updatedAt = LocalDateTime.now(),
+                )
+            )
+        }
+    }
 
     fun submit() {
         scope.launch {
@@ -224,6 +274,9 @@ fun HangoutComposerPage() {
                     pastime = pastime,
                 )
                 val created = HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft, photo = picture)
+                // La mesa ya existe en el backend: el borrador y su foto sobran
+                tracker.closed = true
+                LocalStore.discardDraft(me)
                 HangoutPhotos.discard(picture)
                 photo = null
                 // El creador también queda registrado como participante
@@ -243,11 +296,14 @@ fun HangoutComposerPage() {
     fun giveUp() {
         if (tracker.reported) return
         tracker.reported = true
+        // Cancelar descarta el borrador; salir con la flecha de atrás lo conserva
+        tracker.closed = true
         HangoutPhotos.discard(photo)
         photo = null
         scope.launch {
             val me = SessionVault.memberId()
             if (me != null) {
+                LocalStore.discardDraft(me)
                 val stage = tracker.stage
                 val record = HangoutDropOff(
                     memberId = me,
