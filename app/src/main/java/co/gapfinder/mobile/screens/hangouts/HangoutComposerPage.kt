@@ -1,6 +1,10 @@
 package co.gapfinder.mobile.screens.hangouts
 
+import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,16 +48,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.DropOffRepository
+import co.gapfinder.mobile.data.HangoutPhotos
 import co.gapfinder.mobile.data.HangoutRepository
 import co.gapfinder.mobile.data.PastimeRepository
 import co.gapfinder.mobile.data.SpotRepository
@@ -74,12 +82,14 @@ import co.gapfinder.mobile.ui.nav.Toaster
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
+import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.LocalDateTime
 
 private const val TAG = "HangoutComposer"
@@ -110,6 +120,7 @@ fun HangoutComposerPage() {
     var minutes by remember { mutableIntStateOf(0) }
     var seats by remember { mutableIntStateOf(DEFAULT_SEATS) }
     var blurb by remember { mutableStateOf("") }
+    var photo by remember { mutableStateOf<File?>(null) }
     val tracker = remember { DraftTracker() }
 
     var warming by remember { mutableStateOf(true) }
@@ -117,6 +128,43 @@ fun HangoutComposerPage() {
     var failure by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf(OpenSheet.None) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Archivo donde la cámara está escribiendo la foto (null si no hay captura en curso)
+    var capturing by remember { mutableStateOf<File?>(null) }
+
+    // Normaliza la foto (JPEG reducido y derecho) y reemplaza la anterior
+    fun adoptPhoto(source: Uri, leftover: File? = null) {
+        scope.launch {
+            try {
+                val fresh = HangoutPhotos.normalize(context, source)
+                HangoutPhotos.discard(photo)
+                photo = fresh
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.d(TAG, "Photo not readable: $e")
+                Toaster.show("Could not read the photo")
+            } finally {
+                HangoutPhotos.discard(leftover)
+            }
+        }
+    }
+
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val target = capturing
+        capturing = null
+        if (saved && target != null) adoptPhoto(Uri.fromFile(target), leftover = target) else HangoutPhotos.discard(target)
+    }
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+        if (picked != null) adoptPhoto(picked)
+    }
+
+    fun openCamera() {
+        val (file, uri) = HangoutPhotos.cameraTarget(context)
+        capturing = file
+        camera.launch(uri)
+    }
 
     suspend fun fetchCatalogs() {
         warming = true
@@ -151,8 +199,14 @@ fun HangoutComposerPage() {
         scope.launch {
             val pastime = chosenPastime
             val spot = chosenSpot
+            val picture = photo
             if (pastime == null || spot == null) {
                 Toaster.show("Please select an activity and location")
+                return@launch
+            }
+            // El backend no acepta mesas sin foto
+            if (picture == null) {
+                Toaster.show("Please add a photo of the table")
                 return@launch
             }
             val me = SessionVault.memberId() ?: return@launch
@@ -169,7 +223,9 @@ fun HangoutComposerPage() {
                     state = HangoutState.Open,
                     pastime = pastime,
                 )
-                val created = HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft)
+                val created = HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft, photo = picture)
+                HangoutPhotos.discard(picture)
+                photo = null
                 // El creador también queda registrado como participante
                 AttendeeRepository.join(created.id, me)
                 StackNavigator.back()
@@ -187,6 +243,8 @@ fun HangoutComposerPage() {
     fun giveUp() {
         if (tracker.reported) return
         tracker.reported = true
+        HangoutPhotos.discard(photo)
+        photo = null
         scope.launch {
             val me = SessionVault.memberId()
             if (me != null) {
@@ -336,6 +394,19 @@ fun HangoutComposerPage() {
                         },
                     )
 
+                    Spacer(Modifier.height(12.dp))
+
+                    // Foto de la mesa (obligatoria en el backend)
+                    CardSection(heading = "Photo") {
+                        PhotoField(
+                            photo = photo,
+                            onCamera = { openCamera() },
+                            onGallery = {
+                                gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                        )
+                    }
+
                     Spacer(Modifier.height(32.dp))
 
                     if (sending) {
@@ -407,6 +478,45 @@ private fun CardSection(heading: String, body: @Composable () -> Unit) {
         )
         Spacer(Modifier.height(12.dp))
         body()
+    }
+}
+
+/** Vista previa de la foto con los botones de cámara y galería. */
+@Composable
+private fun PhotoField(photo: File?, onCamera: () -> Unit, onGallery: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.fillMaxWidth()) {
+        if (photo != null) {
+            AsyncImage(
+                model = photo,
+                contentDescription = "Open table photo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(180.dp).background(Palette.Fog, shape).clip(shape),
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PhotoSourceButton(Glyphs.photoCameraRounded, if (photo == null) "Take photo" else "Retake", onCamera, Modifier.weight(1f))
+            PhotoSourceButton(Glyphs.photoLibraryRounded, "Gallery", onGallery, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun PhotoSourceButton(glyph: ImageVector, label: String, onTap: () -> Unit, modifier: Modifier) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        modifier
+            .background(Palette.Fog, shape)
+            .border(1.5.dp, Palette.Ink.fade(0.12f), shape)
+            .inkTap(shape) { onTap() }
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(glyph, contentDescription = null, tint = Palette.Sky, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text = label, style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 13.sp, color = Palette.Ink))
     }
 }
 
