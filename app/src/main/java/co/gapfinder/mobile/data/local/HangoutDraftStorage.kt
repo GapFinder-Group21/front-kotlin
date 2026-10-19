@@ -37,4 +37,8 @@ interface HangoutDraftDao {
 
     @Query("DELETE FROM hangout_drafts WHERE memberId = :memberId")
     suspend fun discard(memberId: Int)
+
+    /** Fotos de todos los borradores, para borrarlas del disco al cerrar sesión. */
+    @Query("SELECT photoPath FROM hangout_drafts WHERE photoPath IS NOT NULL")
+    suspend fun photoPaths(): List<String>
 }

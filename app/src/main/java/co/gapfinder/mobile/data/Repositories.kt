@@ -1,6 +1,7 @@
 package co.gapfinder.mobile.data
 
 import android.util.Log
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.Alert
 import co.gapfinder.mobile.domain.Bond
 import co.gapfinder.mobile.domain.BondState
@@ -121,10 +122,11 @@ object AccountRepository {
         return persist(LoginTicket.decode(reply.json))
     }
 
-    /** POST /auth/logout y limpia la sesión local. */
+    /** POST /auth/logout y limpia la sesión y los datos guardados en el teléfono. */
     suspend fun signOut() {
         HttpGateway.send("/auth/logout")
         SessionVault.wipe()
+        LocalStore.wipe()
     }
 
     private suspend fun persist(ticket: LoginTicket): LoginTicket {
