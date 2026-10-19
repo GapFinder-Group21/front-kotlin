@@ -14,6 +14,7 @@ import androidx.room.TypeConverters
     entities = [
         LectureEntity::class,
         FreeWindowEntity::class,
+        MyHangoutEntity::class,
     ],
     version = 1,
     exportSchema = false,
@@ -21,6 +22,8 @@ import androidx.room.TypeConverters
 @TypeConverters(RoomConverters::class)
 abstract class GapFinderDatabase : RoomDatabase() {
     abstract fun timetable(): TimetableDao
+
+    abstract fun myHangouts(): MyHangoutDao
 
     companion object {
         private const val FILE = "gapfinder.db"
