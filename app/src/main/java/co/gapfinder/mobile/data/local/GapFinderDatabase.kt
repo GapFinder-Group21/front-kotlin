@@ -15,6 +15,7 @@ import androidx.room.TypeConverters
         LectureEntity::class,
         FreeWindowEntity::class,
         MyHangoutEntity::class,
+        HangoutDraftEntity::class,
     ],
     version = 1,
     exportSchema = false,
@@ -25,6 +26,8 @@ abstract class GapFinderDatabase : RoomDatabase() {
 
     abstract fun myHangouts(): MyHangoutDao
 
+    abstract fun hangoutDrafts(): HangoutDraftDao
+
     companion object {
         private const val FILE = "gapfinder.db"
 
@@ -34,7 +37,8 @@ abstract class GapFinderDatabase : RoomDatabase() {
         fun get(context: Context): GapFinderDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(context.applicationContext, GapFinderDatabase::class.java, FILE)
-                    // Lo guardado es una copia de lo que hay en el backend: si cambia el esquema se vuelve a bajar
+                    // Casi todo es una copia del backend que se vuelve a bajar; lo único que se pierde
+                    // si cambia el esquema es un borrador del wizard sin publicar
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { instance = it }
