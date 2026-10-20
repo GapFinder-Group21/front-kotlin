@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,9 +43,12 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AccountRepository
 import co.gapfinder.mobile.domain.EnergyLevel
 import co.gapfinder.mobile.foundation.ACADEMIC_PROGRAMS
+import co.gapfinder.mobile.foundation.Connectivity
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.FormField
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.NightHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Destination
@@ -76,6 +80,9 @@ fun SignUpPage() {
     var career by remember { mutableStateOf<String?>(ACADEMIC_PROGRAMS.first()) }
     var energy by remember { mutableStateOf(EnergyLevel.Regular) }
     var busy by remember { mutableStateOf(false) }
+    val online by rememberOnline()
+    // true si el usuario tocó Create Account sin red: se crea la cuenta apenas vuelva la conexión
+    var waitingForNetwork by remember { mutableStateOf(false) }
 
     fun submitAccount() {
         val name = fullName.trim()
@@ -113,6 +120,13 @@ fun SignUpPage() {
             Toaster.show("Por favor ingresa tu número de teléfono")
             return
         }
+        // Sin red no se intenta: se avisa y se espera a que vuelva
+        if (!Connectivity.isOnline()) {
+            waitingForNetwork = true
+            Toaster.show("Sin conexión. Tu cuenta se crea cuando vuelva el internet.")
+            return
+        }
+        waitingForNetwork = false
 
         busy = true
         scope.launch {
@@ -133,6 +147,11 @@ fun SignUpPage() {
                 busy = false
             }
         }
+    }
+
+    // Reintenta el envío que quedó esperando la red
+    LaunchedEffect(online) {
+        if (online && waitingForNetwork) submitAccount()
     }
 
     Column(
@@ -224,6 +243,14 @@ fun SignUpPage() {
             )
 
             Spacer(Modifier.height(28.dp))
+
+            if (!online) {
+                OfflineNote(
+                    if (waitingForNetwork) "Sin conexión. Tu cuenta se crea automáticamente cuando vuelva el internet."
+                    else "Sin conexión. Crear la cuenta necesita internet."
+                )
+                Spacer(Modifier.height(14.dp))
+            }
 
             if (busy) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
