@@ -156,8 +156,11 @@ object MemberRepository {
 
     /** POST /users/{userId}/interests/{interestId} */
     suspend fun attachHobby(memberId: Int, hobbyId: Int) {
-        HttpGateway.send("/users/$memberId/interests/$hobbyId").expect(200, "Error adding interest")
+        HttpGateway.send(hobbyPath(memberId, hobbyId)).expect(200, "Error adding interest")
     }
+
+    /** Ruta de POST para agregar un interés; también la usa la cola de acciones. */
+    fun hobbyPath(memberId: Int, hobbyId: Int): String = "/users/$memberId/interests/$hobbyId"
 
     /** PATCH /users/{userId}/location/gps — el backend resuelve el edificio a partir de las coordenadas. */
     suspend fun relocate(memberId: Int, latitude: Double, longitude: Double) {
