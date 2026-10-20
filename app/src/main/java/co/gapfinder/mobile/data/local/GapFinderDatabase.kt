@@ -16,8 +16,10 @@ import androidx.room.TypeConverters
         FreeWindowEntity::class,
         MyHangoutEntity::class,
         HangoutDraftEntity::class,
+        PendingActionEntity::class,
     ],
-    version = 1,
+    // 2: tabla pending_actions (cola de acciones sin red)
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(RoomConverters::class)
@@ -27,6 +29,8 @@ abstract class GapFinderDatabase : RoomDatabase() {
     abstract fun myHangouts(): MyHangoutDao
 
     abstract fun hangoutDrafts(): HangoutDraftDao
+
+    abstract fun pendingActions(): PendingActionDao
 
     companion object {
         private const val FILE = "gapfinder.db"

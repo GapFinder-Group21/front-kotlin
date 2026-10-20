@@ -82,6 +82,11 @@ object LocalStore {
 
     suspend fun discardDraft(memberId: Int) = db.hangoutDrafts().discard(memberId)
 
+    // ============================================================ Acciones pendientes
+
+    /** DAO de la cola de acciones; solo lo usa [co.gapfinder.mobile.data.outbox.Outbox]. */
+    internal fun pendingActions(): PendingActionDao = db.pendingActions()
+
     // ============================================================ Sesión
 
     /** Borra todo lo guardado (logout), incluidas las fotos de borradores sin publicar. */
