@@ -40,14 +40,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.GeoProbe
 import co.gapfinder.mobile.data.HangoutRepository
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutState
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.CampusBoard
 import co.gapfinder.mobile.ui.kit.Glyphs
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.Portrait
 import co.gapfinder.mobile.ui.kit.SpotStatusLine
+import co.gapfinder.mobile.ui.kit.lastUpdatedText
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
@@ -62,6 +67,7 @@ import java.time.LocalDateTime
 
 private const val TAG = "HangoutMapTab"
 private const val GPS_REQUIRED = "Location is required to discover tables nearby."
+private const val NO_CONNECTION = "No connection. Open Tables show up when you're back online."
 
 /** Pestaña "Open Tables": mapa del campus + mesas abiertas (antes MapScreen). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,10 +79,12 @@ fun HangoutMapTab() {
     var fetching by remember { mutableStateOf(true) }
     var viewerId by remember { mutableStateOf<Int?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // Fecha de lo guardado en Room cuando eso es lo que se está mostrando (null si viene de la red)
+    var savedAt by remember { mutableStateOf<LocalDateTime?>(null) }
+    val online by rememberOnline()
     val scope = rememberCoroutineScope()
 
     suspend fun refreshBoard() {
-        fetching = true
         notice = null
         try {
             val me = SessionVault.memberId()
@@ -89,25 +97,47 @@ fun HangoutMapTab() {
                 return
             }
 
-            // Solo las mesas abiertas que todavía no terminan
+            // Primero lo guardado en Room (sin las mesas que ya terminaron); el spinner solo sale si no hay nada
             val now = LocalDateTime.now()
-            val open = HangoutRepository.all().filter { it.state == HangoutState.Open && it.endsAt.isAfter(now) }
-            listings = open
+            val saved = LocalStore.boardOf(me)
+            if (saved != null) {
+                listings = saved.listings.filter { it.state == HangoutState.Open && it.endsAt.isAfter(now) }
+                joinedIds = saved.joinedIds
+                savedAt = saved.savedAt
+            } else {
+                fetching = true
+            }
 
-            // Se consulta en paralelo en cuáles ya está el usuario
-            val checks = coroutineScope { open.map { table -> async { attendsQuietly(table.id, me) } }.awaitAll() }
-            joinedIds = open.filterIndexed { index, _ -> checks[index] }.map { it.id }.toSet()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.d(TAG, "Error loading Open Tables: $e")
-            notice = e.plainText()
+            if (!Connectivity.isOnline()) {
+                if (saved == null) notice = NO_CONNECTION
+                return
+            }
+
+            try {
+                // Solo las mesas abiertas que todavía no terminan
+                val open = HangoutRepository.all().filter { it.state == HangoutState.Open && it.endsAt.isAfter(now) }
+
+                // Se consulta en paralelo en cuáles ya está el usuario
+                val checks = coroutineScope { open.map { table -> async { attendsQuietly(table.id, me) } }.awaitAll() }
+                val joined = open.filterIndexed { index, _ -> checks[index] }.map { it.id }.toSet()
+                LocalStore.saveBoard(me, open, joined)
+                listings = open
+                joinedIds = joined
+                savedAt = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.d(TAG, "Error loading Open Tables: $e")
+                // Con algo guardado se sigue mostrando eso con su fecha; el error solo se ve si no hay nada
+                if (saved == null) notice = e.plainText()
+            }
         } finally {
             fetching = false
         }
     }
 
-    LaunchedEffect(Unit) { refreshBoard() }
+    // Al abrir la pestaña y cada vez que cambia la red: sin red muestra lo guardado, con red actualiza
+    LaunchedEffect(online) { refreshBoard() }
     // Recarga cada vez que cambia el estado del GPS
     LaunchedEffect(Unit) {
         GeoProbe.gpsChanges().collect { status ->
@@ -135,6 +165,12 @@ fun HangoutMapTab() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         MapBlock()
+                        savedAt?.let { moment ->
+                            OfflineNote(
+                                "${if (online) "Couldn't refresh" else "No connection"} · ${lastUpdatedText(moment)}",
+                                Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                         ListingBlock(
                             notice = notice,
                             listings = listings,
