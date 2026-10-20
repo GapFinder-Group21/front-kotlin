@@ -74,9 +74,12 @@ import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutDropOff
 import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.domain.Pastime
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.kit.plainTap
@@ -139,6 +142,7 @@ fun HangoutComposerPage() {
     var sheet by remember { mutableStateOf(OpenSheet.None) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val online by rememberOnline()
 
     // Archivo donde la cámara está escribiendo la foto (null si no hay captura en curso).
     // rememberSaveable porque Android puede matar la app mientras la cámara está abierta.
@@ -181,11 +185,25 @@ fun HangoutComposerPage() {
         warming = true
         failure = null
         try {
-            // Catálogos en paralelo
-            val (fetchedPastimes, fetchedSpots) = coroutineScope {
-                val a = async { PastimeRepository.catalog() }
-                val b = async { SpotRepository.all() }
-                a.await() to b.await()
+            val (fetchedPastimes, fetchedSpots) = try {
+                if (!Connectivity.isOnline()) throw IOException("offline")
+                // Catálogos en paralelo; se guardan para poder crear mesas sin red
+                coroutineScope {
+                    val a = async { PastimeRepository.catalog() }
+                    val b = async { SpotRepository.all() }
+                    a.await() to b.await()
+                }.also { (fresh, places) ->
+                    LocalStore.savePastimes(fresh)
+                    LocalStore.saveSpots(places)
+                }
+            } catch (e: IOException) {
+                // Sin red: los catálogos que se guardaron la última vez
+                val savedPastimes = LocalStore.pastimes()
+                val savedSpots = LocalStore.spots()
+                if (savedPastimes == null || savedSpots == null) {
+                    throw IOException("No connection. Activities and buildings load when you're back online.")
+                }
+                savedPastimes.items to savedSpots.items
             }
             pastimes = fetchedPastimes
             spots = fetchedSpots
@@ -218,6 +236,10 @@ fun HangoutComposerPage() {
     }
 
     LaunchedEffect(Unit) { fetchCatalogs() }
+    // Si no se pudieron cargar los catálogos por falta de red, se reintenta solo cuando vuelve
+    LaunchedEffect(online) {
+        if (online && failure != null) fetchCatalogs()
+    }
 
     // Guarda el borrador en Room con cada cambio. El efecto se reinicia con cada cambio, así que
     // el delay hace de debounce: solo se escribe cuando el usuario se detiene un momento.
@@ -275,6 +297,8 @@ fun HangoutComposerPage() {
                     pastime = pastime,
                 )
                 val created = try {
+                    // Sin red ni se intenta, para no esperar el timeout
+                    if (!Connectivity.isOnline()) throw IOException("offline")
                     HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft, photo = picture)
                 } catch (e: IOException) {
                     // Sin red: la mesa queda en la cola (con su foto) y se publica sola cuando vuelva la conexión
@@ -404,6 +428,11 @@ fun HangoutComposerPage() {
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp)
                 ) {
+                    if (!online) {
+                        OfflineNote("No connection. You can still publish: the table is saved and goes out when you're back online.")
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     // Actividad
                     PickerField(
                         heading = "Activity",
