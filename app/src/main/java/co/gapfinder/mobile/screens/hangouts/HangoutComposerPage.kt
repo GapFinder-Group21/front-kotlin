@@ -61,13 +61,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AttendeeRepository
-import co.gapfinder.mobile.data.DropOffRepository
 import co.gapfinder.mobile.data.HangoutPhotos
 import co.gapfinder.mobile.data.HangoutRepository
 import co.gapfinder.mobile.data.PastimeRepository
 import co.gapfinder.mobile.data.SpotRepository
 import co.gapfinder.mobile.data.local.HangoutDraftEntity
 import co.gapfinder.mobile.data.local.LocalStore
+import co.gapfinder.mobile.data.outbox.HangoutCouriers
 import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.DraftStage
 import co.gapfinder.mobile.domain.Hangout
@@ -87,13 +87,12 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 import java.time.LocalDateTime
 
 private const val TAG = "HangoutComposer"
@@ -119,7 +118,7 @@ private class DraftTracker {
 }
 
 /** Formulario para publicar una mesa abierta (antes CreateOpenTableScreen). */
-@OptIn(ExperimentalMaterial3Api::class, DelicateCoroutinesApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HangoutComposerPage() {
     var pastimes by remember { mutableStateOf<List<Pastime>>(emptyList()) }
@@ -275,14 +274,36 @@ fun HangoutComposerPage() {
                     state = HangoutState.Open,
                     pastime = pastime,
                 )
-                val created = HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft, photo = picture)
-                // La mesa ya existe en el backend: el borrador y su foto sobran
+                val created = try {
+                    HangoutRepository.host(hostId = me, spotId = spot.id, draft = draft, photo = picture)
+                } catch (e: IOException) {
+                    // Sin red: la mesa queda en la cola (con su foto) y se publica sola cuando vuelva la conexión
+                    HangoutCouriers.enqueueCreate(
+                        hostId = me,
+                        spotId = spot.id,
+                        body = HangoutRepository.newTableBody(me, spot.id, draft),
+                        durationMinutes = minutes,
+                        photo = picture,
+                    )
+                    null
+                }
+                // Publicada o en la cola, el borrador ya sobra
                 tracker.closed = true
                 LocalStore.discardDraft(me)
-                HangoutPhotos.discard(picture)
                 photo = null
-                // El creador también queda registrado como participante
-                AttendeeRepository.join(created.id, me)
+                if (created == null) {
+                    Toaster.show("No connection: your Open Table will be published when you're back online")
+                } else {
+                    HangoutPhotos.discard(picture)
+                    // El creador también queda registrado como participante
+                    try {
+                        AttendeeRepository.join(created.id, me)
+                    } catch (e: IOException) {
+                        HangoutCouriers.enqueueJoin(created.id, me)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Creator not registered as participant: $e")
+                    }
+                }
                 StackNavigator.back()
             } catch (e: CancellationException) {
                 throw e
@@ -316,13 +337,8 @@ fun HangoutComposerPage() {
                     maxParticipants = if (stage == DraftStage.PickHeadcount) seats else null,
                     spotId = if (stage == DraftStage.PickSpot) chosenSpot?.id else null,
                 )
-                GlobalScope.launch {
-                    try {
-                        DropOffRepository.log(record)
-                    } catch (e: Exception) {
-                        Log.d(TAG, "Abandonment not registered: $e")
-                    }
-                }
+                // Va por la cola: se manda enseguida si hay red, o cuando vuelva si no
+                HangoutCouriers.enqueueDropOff(record)
             }
             StackNavigator.back()
         }

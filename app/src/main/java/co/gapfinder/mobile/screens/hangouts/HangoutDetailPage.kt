@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.HangoutRepository
+import co.gapfinder.mobile.data.outbox.HangoutCouriers
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutAttendee
 import co.gapfinder.mobile.domain.HangoutState
@@ -65,6 +66,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 /** Estado de la carga (equivalente al FutureBuilder). */
 private sealed interface DetailPhase {
@@ -109,6 +111,10 @@ fun HangoutDetailPage(hangoutId: Int) {
                 Toaster.show("Successfully joined the table!", background = Palette.Teal)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: IOException) {
+                // Sin red: la solicitud queda en la cola y se manda cuando vuelva la conexión
+                HangoutCouriers.enqueueJoin(hangoutId, me)
+                Toaster.show("No connection: you'll join the table when you're back online")
             } catch (e: Exception) {
                 // El backend explica el motivo (mesa llena, ya estaba dentro, etc.)
                 Toaster.show(e.plainText())

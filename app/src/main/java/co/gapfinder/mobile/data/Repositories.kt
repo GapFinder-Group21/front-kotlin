@@ -524,21 +524,22 @@ object HangoutRepository {
      * cupo mayor a 0, estado y una foto JPG o PNG. Los datos van en la parte "openTable" como JSON
      * y la foto en la parte "photo".
      */
-    suspend fun host(hostId: Int, spotId: Int, draft: Hangout, photo: File): Hangout {
-        val form = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart(
-                "openTable",
-                null,
-                draft.withRelations(hostId, spotId).toString().toRequestBody("application/json".toMediaType()),
-            )
-            .addFormDataPart("photo", photo.name, photo.asRequestBody("image/jpeg".toMediaType()))
-            .build()
-        return Hangout.decode(
-            HttpGateway.sendForm("/open-tables", form)
+    suspend fun host(hostId: Int, spotId: Int, draft: Hangout, photo: File): Hangout =
+        Hangout.decode(
+            HttpGateway.sendForm("/open-tables", hostForm(newTableBody(hostId, spotId, draft), photo))
                 .expectOrExplain(201, "Error creating open table").json
         )
-    }
+
+    /** JSON de la parte "openTable": la mesa con su creador y su edificio. */
+    fun newTableBody(hostId: Int, spotId: Int, draft: Hangout): JSONObject = draft.withRelations(hostId, spotId)
+
+    /** Multipart de POST /open-tables; también lo usa la cola de acciones para reenviar la mesa. */
+    fun hostForm(body: JSONObject, photo: File): MultipartBody =
+        MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("openTable", null, body.toString().toRequestBody("application/json".toMediaType()))
+            .addFormDataPart("photo", photo.name, photo.asRequestBody("image/jpeg".toMediaType()))
+            .build()
 
     suspend fun edit(id: Int, hostId: Int, spotId: Int, hangout: Hangout): Hangout =
         Hangout.decode(
@@ -577,9 +578,13 @@ object AttendeeRepository {
     /** POST /open-table-participants/table/{tableId}/join?userId= */
     suspend fun join(hangoutId: Int, memberId: Int): HangoutAttendee =
         HangoutAttendee.decode(
-            HttpGateway.send("/open-table-participants/table/$hangoutId/join?userId=$memberId")
+            HttpGateway.send(joinPath(hangoutId, memberId))
                 .expectOrExplain(201, "Error joining the table").json
         )
+
+    /** Ruta de POST para unirse; también la usa la cola de acciones. */
+    fun joinPath(hangoutId: Int, memberId: Int): String =
+        "/open-table-participants/table/$hangoutId/join?userId=$memberId"
 
     /** DELETE /open-table-participants/table/{tableId}/leave?userId= */
     suspend fun leave(hangoutId: Int, memberId: Int) {
@@ -595,8 +600,10 @@ object AttendeeRepository {
 // ============================================================ Abandonos del formulario de mesa
 
 object DropOffRepository {
+    const val PATH = "/open-table-abandonments"
+
     suspend fun log(dropOff: HangoutDropOff) {
-        HttpGateway.send("/open-table-abandonments", dropOff.encode()).expect(201, "Error registering abandonment")
+        HttpGateway.send(PATH, dropOff.encode()).expect(201, "Error registering abandonment")
     }
 
     /** GET /open-table-abandonments/stats?since= — abandonos por paso desde esa fecha. */

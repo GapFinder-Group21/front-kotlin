@@ -66,6 +66,7 @@ object Outbox {
     fun attach(context: Context) {
         appContext = context.applicationContext
         register(TYPE_REQUEST, Courier(::deliverRequest))
+        HangoutCouriers.registerAll()
         // Por si quedaron acciones de antes de cerrar la app
         flush()
     }
