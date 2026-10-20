@@ -67,4 +67,7 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+
+    // Cola de acciones pendientes: reenvía lo que se hizo sin red cuando vuelve la conexión
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 }
