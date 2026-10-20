@@ -6,12 +6,17 @@ import co.gapfinder.mobile.domain.EnergyLevel
 import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutState
+import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.Lecture
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.Pastime
 import co.gapfinder.mobile.domain.Weekday
+import co.gapfinder.mobile.foundation.mapNodes
+import co.gapfinder.mobile.foundation.toJsonArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
@@ -21,6 +26,12 @@ data class SavedTimetable(val lectures: List<Lecture>, val windows: List<FreeWin
 
 /** Mis open tables guardadas en el teléfono y el momento en que se bajaron del backend. */
 data class SavedHangouts(val hosted: List<Hangout>, val attended: List<Hangout>, val savedAt: LocalDateTime)
+
+/** Mesas abiertas del mapa guardadas en el teléfono, en cuáles participa el usuario y cuándo se bajaron. */
+data class SavedBoard(val listings: List<Hangout>, val joinedIds: Set<Int>, val savedAt: LocalDateTime)
+
+/** Catálogo guardado y el momento en que se bajó del backend. */
+data class SavedCatalog<T>(val items: List<T>, val savedAt: LocalDateTime)
 
 /**
  * Puerta de entrada al almacenamiento local. Las pantallas guardan y leen modelos del dominio
@@ -57,11 +68,14 @@ object LocalStore {
 
     // ============================================================ Mis open tables
 
+    private val MINE = listOf(HangoutRole.HOSTED, HangoutRole.ATTENDED)
+    private val BOARD = listOf(HangoutRole.BOARD)
+
     /** Mesas guardadas del usuario, o null si nunca se guardaron. */
     suspend fun myHangoutsOf(memberId: Int): SavedHangouts? {
         val dao = db.myHangouts()
-        val savedAt = dao.lastSavedAt(memberId) ?: return null
-        val (hosted, attended) = dao.mineOf(memberId).partition { it.role == HangoutRole.HOSTED }
+        val savedAt = dao.lastSavedAt(memberId, MINE) ?: return null
+        val (hosted, attended) = dao.listOf(memberId, MINE).partition { it.role == HangoutRole.HOSTED }
         return SavedHangouts(hosted.map { it.toHangout() }, attended.map { it.toHangout() }, savedAt)
     }
 
@@ -69,9 +83,59 @@ object LocalStore {
         val now = LocalDateTime.now()
         db.myHangouts().replace(
             memberId,
+            MINE,
             hosted.map { it.toEntity(memberId, HangoutRole.HOSTED, now) } +
                 attended.map { it.toEntity(memberId, HangoutRole.ATTENDED, now) },
         )
+    }
+
+    // ============================================================ Mesas del mapa
+
+    /** Mesas abiertas guardadas del mapa, o null si nunca se guardaron. */
+    suspend fun boardOf(memberId: Int): SavedBoard? {
+        val dao = db.myHangouts()
+        val savedAt = dao.lastSavedAt(memberId, BOARD) ?: return null
+        val rows = dao.listOf(memberId, BOARD)
+        return SavedBoard(rows.map { it.toHangout() }, rows.filter { it.joined }.map { it.id }.toSet(), savedAt)
+    }
+
+    suspend fun saveBoard(memberId: Int, listings: List<Hangout>, joinedIds: Set<Int>) {
+        val now = LocalDateTime.now()
+        db.myHangouts().replace(
+            memberId,
+            BOARD,
+            listings.map { it.toEntity(memberId, HangoutRole.BOARD, now).copy(joined = it.id in joinedIds) },
+        )
+    }
+
+    /** Una mesa guardada en el mapa o en mis mesas, para el detalle sin red. */
+    suspend fun hangoutById(memberId: Int, id: Int): Pair<Hangout, LocalDateTime>? =
+        db.myHangouts().byId(memberId, id)?.let { it.toHangout() to it.savedAt }
+
+    // ============================================================ Catálogos
+
+    suspend fun saveHobbies(items: List<Hobby>) = saveCatalog(HOBBIES, items.toJsonArray { it.encode() })
+
+    suspend fun hobbies(): SavedCatalog<Hobby>? = catalog(HOBBIES, Hobby::decode)
+
+    suspend fun savePastimes(items: List<Pastime>) = saveCatalog(PASTIMES, items.toJsonArray { it.encode() })
+
+    suspend fun pastimes(): SavedCatalog<Pastime>? = catalog(PASTIMES, Pastime::decode)
+
+    suspend fun saveSpots(items: List<CampusSpot>) = saveCatalog(SPOTS, items.toJsonArray { it.encode() })
+
+    suspend fun spots(): SavedCatalog<CampusSpot>? = catalog(SPOTS, CampusSpot::decode)
+
+    private const val HOBBIES = "hobbies"
+    private const val PASTIMES = "pastimes"
+    private const val SPOTS = "spots"
+
+    private suspend fun saveCatalog(name: String, json: JSONArray) =
+        db.catalogs().save(CatalogEntity(name, json.toString(), LocalDateTime.now()))
+
+    private suspend fun <T> catalog(name: String, decode: (JSONObject) -> T): SavedCatalog<T>? {
+        val row = db.catalogs().of(name) ?: return null
+        return SavedCatalog(JSONArray(row.json).mapNodes(decode), row.savedAt)
     }
 
     // ============================================================ Borrador del wizard
