@@ -30,6 +30,9 @@ data class SavedHangouts(val hosted: List<Hangout>, val attended: List<Hangout>,
 /** Mesas abiertas del mapa guardadas en el teléfono, en cuáles participa el usuario y cuándo se bajaron. */
 data class SavedBoard(val listings: List<Hangout>, val joinedIds: Set<Int>, val savedAt: LocalDateTime)
 
+/** Una mesa guardada, si el usuario ya está en ella y cuándo se bajó del backend. */
+data class SavedHangout(val hangout: Hangout, val joined: Boolean, val savedAt: LocalDateTime)
+
 /** Catálogo guardado y el momento en que se bajó del backend. */
 data class SavedCatalog<T>(val items: List<T>, val savedAt: LocalDateTime)
 
@@ -109,8 +112,10 @@ object LocalStore {
     }
 
     /** Una mesa guardada en el mapa o en mis mesas, para el detalle sin red. */
-    suspend fun hangoutById(memberId: Int, id: Int): Pair<Hangout, LocalDateTime>? =
-        db.myHangouts().byId(memberId, id)?.let { it.toHangout() to it.savedAt }
+    suspend fun hangoutById(memberId: Int, id: Int): SavedHangout? =
+        db.myHangouts().byId(memberId, id)?.let {
+            SavedHangout(it.toHangout(), joined = it.role != HangoutRole.BOARD || it.joined, savedAt = it.savedAt)
+        }
 
     // ============================================================ Catálogos
 
