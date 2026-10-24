@@ -43,8 +43,12 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.RecommendationRepository
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.Recommendation
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
+import co.gapfinder.mobile.ui.kit.OfflineNote
+import co.gapfinder.mobile.ui.kit.lastUpdatedText
 import co.gapfinder.mobile.ui.kit.Portrait
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Destination
@@ -65,18 +69,39 @@ import java.time.LocalDateTime
 fun RecommendationsTab(isActive: Boolean) {
     var cycle by remember { mutableIntStateOf(0) }
     var outcome by remember { mutableStateOf<Fetch<Recommendation>>(Fetch.Waiting) }
+    // Cuándo se guardó lo que se ve, si viene del caché sin red (null si viene del backend)
+    var cachedAt by remember { mutableStateOf<LocalDateTime?>(null) }
+    val online by rememberOnline()
 
-    LaunchedEffect(cycle) {
+    // También corre cuando cambia la red: sin red muestra el caché y al volver actualiza solo
+    LaunchedEffect(cycle, online) {
         outcome = Fetch.Waiting
-        outcome = try {
-            val me = SessionVault.memberId() ?: throw Exception("No user session found")
+        val me = SessionVault.memberId()
+        if (me == null) {
+            outcome = Fetch.Broken(Exception("No user session found"))
+            return@LaunchedEffect
+        }
+
+        if (!Connectivity.isOnline()) {
+            val cached = lastKnownRecommendation(me)
+            cachedAt = cached?.second
+            outcome = if (cached != null) Fetch.Done(cached.first)
+            else Fetch.Broken(OfflineFault("No connection. Recommendations show up here once you've opened this tab with internet."))
+            return@LaunchedEffect
+        }
+
+        try {
             // La primera vez se usa lo que HomeWarmup ya cargó en paralelo; si falló, se intenta de nuevo
             val warm = HomeWarmup.takeRecommendation(me)?.getOrNull()
-            Fetch.Done(warm ?: RecommendationRepository.hangoutsFor(me))
+            outcome = Fetch.Done(warm ?: RecommendationRepository.hangoutsFor(me))
+            cachedAt = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Fetch.Broken(e)
+            // Si la red falla y hay algo en el caché, se muestra eso con su fecha
+            val cached = lastKnownRecommendation(me)
+            cachedAt = cached?.second
+            outcome = if (cached != null) Fetch.Done(cached.first) else Fetch.Broken(e)
         }
     }
 
@@ -99,11 +124,18 @@ fun RecommendationsTab(isActive: Boolean) {
             when (val state = outcome) {
                 Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
 
-                is Fetch.Broken -> LoadFailure(
-                    detail = state.cause.message ?: state.cause.toString(),
-                    onRetry = reload,
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                is Fetch.Broken -> if (state.cause is OfflineFault) {
+                    OfflineNote(
+                        text = state.cause.message ?: "",
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                } else {
+                    LoadFailure(
+                        detail = state.cause.message ?: state.cause.toString(),
+                        onRetry = reload,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
 
                 is Fetch.Done -> PullToRefreshBox(
                     isRefreshing = false,
@@ -112,6 +144,11 @@ fun RecommendationsTab(isActive: Boolean) {
                 ) {
                     val data = state.value
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                        // Lo que se ve es del caché: se indica de cuándo es
+                        cachedAt?.let { moment ->
+                            item { OfflineNote("No connection · ${lastUpdatedText(moment)}") }
+                            item { Spacer(Modifier.height(16.dp)) }
+                        }
                         item { FavoriteSpotCard(data) }
                         item { Spacer(Modifier.height(28.dp)) }
                         item { SuggestedCaption(total = data.hangouts.size) }
@@ -127,6 +164,14 @@ fun RecommendationsTab(isActive: Boolean) {
         }
     }
 }
+
+/**
+ * Lo último que el caché en memoria de Nicolás (RecommendationRepository) tiene para el usuario
+ * y cuándo se guardó, aunque ya haya pasado el TTL: sin red es mejor algo viejo con su fecha que nada.
+ * Es el único punto que depende de la API del caché; si en main quedó con otro nombre, se ajusta aquí.
+ */
+private fun lastKnownRecommendation(memberId: Int): Pair<Recommendation, LocalDateTime>? =
+    RecommendationRepository.cachedFor(memberId)?.let { it.value to it.savedAt }
 
 @Composable
 private fun SuggestHeader() {
