@@ -359,13 +359,17 @@ object BondRepository {
 
     /** PATCH /friendships/{id}/accept?userId= */
     suspend fun approve(id: Int, memberId: Int): Bond =
-        Bond.decode(HttpGateway.tweak("/friendships/$id/accept?userId=$memberId")
+        Bond.decode(HttpGateway.tweak(answerPath(id, memberId, accept = true))
             .expectOrExplain(200, "Error accepting friend request").json)
 
     /** PATCH /friendships/{id}/reject?userId= */
     suspend fun decline(id: Int, memberId: Int): Bond =
-        Bond.decode(HttpGateway.tweak("/friendships/$id/reject?userId=$memberId")
+        Bond.decode(HttpGateway.tweak(answerPath(id, memberId, accept = false))
             .expectOrExplain(200, "Error rejecting friend request").json)
+
+    /** Ruta de PATCH para aceptar o rechazar una solicitud; también la usa la cola de acciones. */
+    fun answerPath(id: Int, memberId: Int, accept: Boolean): String =
+        "/friendships/$id/${if (accept) "accept" else "reject"}?userId=$memberId"
 
     suspend fun dissolve(id: Int) {
         HttpGateway.erase("/friendships/$id").expectOrExplain(204, "Error deleting friendship")
@@ -450,13 +454,17 @@ object PairingRepository {
 
     /** PATCH /matches/{id}/accept?userId= */
     suspend fun approve(id: Int, memberId: Int): Pairing =
-        Pairing.decode(HttpGateway.tweak("/matches/$id/accept?userId=$memberId")
+        Pairing.decode(HttpGateway.tweak(answerPath(id, memberId, accept = true))
             .expectOrExplain(200, "Error accepting match").json)
 
     /** PATCH /matches/{id}/reject?userId= */
     suspend fun decline(id: Int, memberId: Int): Pairing =
-        Pairing.decode(HttpGateway.tweak("/matches/$id/reject?userId=$memberId")
+        Pairing.decode(HttpGateway.tweak(answerPath(id, memberId, accept = false))
             .expectOrExplain(200, "Error rejecting match").json)
+
+    /** Ruta de PATCH para aceptar o rechazar una invitación de match; también la usa la cola de acciones. */
+    fun answerPath(id: Int, memberId: Int, accept: Boolean): String =
+        "/matches/$id/${if (accept) "accept" else "reject"}?userId=$memberId"
 
     /** PATCH /matches/{id}/complete — marca como terminado un match aceptado. */
     suspend fun complete(id: Int): Pairing =
