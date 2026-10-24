@@ -45,12 +45,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.HangoutRepository
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.Hangout
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.Portrait
 import co.gapfinder.mobile.ui.kit.inkTap
+import co.gapfinder.mobile.ui.kit.lastUpdatedText
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
@@ -61,6 +66,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 
 private const val TAG = "MyHangoutsPage"
 
@@ -72,31 +78,57 @@ fun MyHangoutsPage() {
     var attended by remember { mutableStateOf<List<Hangout>>(emptyList()) }
     var pending by remember { mutableStateOf(true) }
     var fault by remember { mutableStateOf<String?>(null) }
+    // Fecha de lo guardado en Room cuando eso es lo que se está mostrando (null si viene de la red)
+    var savedAt by remember { mutableStateOf<LocalDateTime?>(null) }
+    val online by rememberOnline()
     val scope = rememberCoroutineScope()
 
     suspend fun pullEverything() {
-        pending = true
         fault = null
+        val me = SessionVault.memberId() ?: return
+
+        // Primero lo guardado en Room; el spinner solo sale si todavía no hay nada guardado
+        val saved = LocalStore.myHangoutsOf(me)
+        if (saved != null) {
+            hosted = saved.hosted
+            attended = saved.attended
+            savedAt = saved.savedAt
+            pending = false
+        } else {
+            pending = true
+        }
+
+        // Sin red no se intenta: se queda lo guardado
+        if (!Connectivity.isOnline()) {
+            if (saved == null) fault = "No connection. Your Open Tables show up when you're back online."
+            pending = false
+            return
+        }
+
         try {
-            val me = SessionVault.memberId() ?: return
             val everything = HangoutRepository.all()
             val (mine, others) = everything.partition { it.host?.id == me }
 
             // De las ajenas quedan solo aquellas en las que el usuario figura como participante
             val checks = coroutineScope { others.map { table -> async { attends(table.id, me) } }.awaitAll() }
+            val joined = others.filterIndexed { index, _ -> checks[index] }
+            LocalStore.saveMyHangouts(me, mine, joined)
             hosted = mine
-            attended = others.filterIndexed { index, _ -> checks[index] }
+            attended = joined
+            savedAt = null
             pending = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.d(TAG, "Error loading my Open Tables: $e")
-            fault = e.asDartString()
+            // Con algo guardado se sigue mostrando eso; el error solo se ve si no hay nada
+            if (saved == null) fault = e.asDartString()
             pending = false
         }
     }
 
-    LaunchedEffect(Unit) { pullEverything() }
+    // Al abrir y cada vez que cambia la red: sin red muestra lo guardado, con red actualiza
+    LaunchedEffect(online) { pullEverything() }
 
     Column(Modifier.fillMaxSize().background(Palette.Fog)) {
         InkHeader(title = "My Open Tables", showBack = true)
@@ -118,6 +150,14 @@ fun MyHangoutsPage() {
                             Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(16.dp),
                         ) {
+                            savedAt?.let { moment ->
+                                item {
+                                    OfflineNote(
+                                        "${if (online) "Couldn't refresh" else "No connection"} · ${lastUpdatedText(moment)}",
+                                        Modifier.padding(bottom = 16.dp),
+                                    )
+                                }
+                            }
                             if (hosted.isNotEmpty()) {
                                 item { GroupTitle("Created by me") }
                                 items(hosted) { HistoryCard(it, owner = true) }

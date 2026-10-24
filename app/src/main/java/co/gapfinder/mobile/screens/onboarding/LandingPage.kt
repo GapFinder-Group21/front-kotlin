@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.R
+import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Destination
@@ -35,6 +38,7 @@ import co.gapfinder.mobile.ui.theme.fade
 /** Pantalla de bienvenida (sin auto-login, igual que en Flutter). */
 @Composable
 fun LandingPage() {
+    val online by rememberOnline()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -78,6 +82,12 @@ fun LandingPage() {
         )
 
         Spacer(Modifier.height(64.dp))
+
+        // Se puede entrar a registro o login, pero el envío se bloquea allí hasta que vuelva la red
+        if (!online) {
+            OfflineNote("You're offline. Signing up and logging in need a connection.", onDark = true)
+            Spacer(Modifier.height(16.dp))
+        }
 
         PillButton(
             label = "Get Started",

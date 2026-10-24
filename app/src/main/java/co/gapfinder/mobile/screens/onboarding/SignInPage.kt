@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,8 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AccountRepository
+import co.gapfinder.mobile.foundation.Connectivity
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.FormField
 import co.gapfinder.mobile.ui.kit.NightHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Destination
@@ -47,6 +51,9 @@ fun SignInPage() {
     var mailText by remember { mutableStateOf("") }
     var keyText by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
+    val online by rememberOnline()
+    // true si el usuario tocó Log In sin red: se intenta solo apenas vuelva la conexión
+    var waitingForNetwork by remember { mutableStateOf(false) }
 
     fun attemptEntry() {
         val address = mailText.trim()
@@ -55,6 +62,13 @@ fun SignInPage() {
             Toaster.show("Please fill in all fields")
             return
         }
+        // Sin red no se intenta: se avisa y se espera a que vuelva
+        if (!Connectivity.isOnline()) {
+            waitingForNetwork = true
+            Toaster.show("No connection. You'll be logged in when you're back online.")
+            return
+        }
+        waitingForNetwork = false
         working = true
         scope.launch {
             try {
@@ -68,6 +82,11 @@ fun SignInPage() {
                 working = false
             }
         }
+    }
+
+    // Reintenta el envío que quedó esperando la red
+    LaunchedEffect(online) {
+        if (online && waitingForNetwork) attemptEntry()
     }
 
     Column(
@@ -106,6 +125,14 @@ fun SignInPage() {
             )
 
             Spacer(Modifier.height(28.dp))
+
+            if (!online) {
+                OfflineNote(
+                    if (waitingForNetwork) "No connection. You'll be logged in automatically when you're back online."
+                    else "No connection. Logging in needs internet."
+                )
+                Spacer(Modifier.height(14.dp))
+            }
 
             if (working) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
