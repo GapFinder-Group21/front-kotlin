@@ -17,6 +17,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import co.gapfinder.mobile.data.AlertRepository
 import co.gapfinder.mobile.domain.AlertKind
 import co.gapfinder.mobile.foundation.SessionVault
@@ -27,7 +30,9 @@ import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val TAG = "HomeShell"
@@ -39,11 +44,17 @@ private fun Modifier.onlyWhen(visible: Boolean) = layout { measurable, constrain
     layout(placeable.width, placeable.height) { if (visible) placeable.place(0, 0) }
 }
 
+/** Invitación que abrió el sondeo (no es estado de UI: cambiarla no debe recomponer). */
+private class PollerState {
+    var invite: Job? = null
+}
+
 /** Contenedor principal con las 5 pestañas y la barra inferior (antes MainScreen). */
 @Composable
 fun HomeShell() {
     var selected by rememberSaveable { mutableStateOf(DockTab.Schedule) }
     val handledInvites = remember { mutableSetOf<Int>() } // para no repetir pop-ups
+    val poller = remember { PollerState() }
     val scope = rememberCoroutineScope()
 
     // Al entrar al home se lanzan en paralelo horario, gaps, notificaciones y recomendaciones.
@@ -54,22 +65,31 @@ fun HomeShell() {
     // Revisa las notificaciones y abre la invitación si llegó una solicitud de match nueva
     suspend fun pollAlerts() {
         val me = SessionVault.memberId() ?: return
+        // Una invitación a la vez: mientras haya una abierta no se busca otra
+        if (poller.invite?.isActive == true) return
         try {
             // La primera revisión usa las notificaciones que ya trajo HomeWarmup
             val inbox = HomeWarmup.takeAlerts(me)?.getOrNull() ?: AlertRepository.inboxOf(me)
-            for (alert in inbox) {
-                val pairingId = alert.relatedId ?: continue
-                if (alert.seen || alert.kind != AlertKind.PairingAsked || pairingId in handledInvites) continue
+            val alert = inbox.firstOrNull { alert ->
+                val pairingId = alert.relatedId
+                pairingId != null && !alert.seen && alert.kind == AlertKind.PairingAsked && pairingId !in handledInvites
+            } ?: return
+            val pairingId = alert.relatedId ?: return
 
-                Log.d(TAG, "🎯 MATCH REQUEST DETECTED! MatchID: $pairingId")
-                handledInvites += pairingId
-                scope.launch {
-                    // Se marca como leída cuando el usuario cierra la invitación
-                    StackNavigator.goAndWait(Destination.PairingInvite(pairingId))
-                    runCatching { AlertRepository.markSeen(alert.id, me) }
-                        .onFailure { Log.d(TAG, "Error marking read: $it") }
+            Log.d(TAG, "🎯 MATCH REQUEST DETECTED! MatchID: $pairingId")
+            handledInvites += pairingId
+            // La invitación va en el scope del home, no en el del sondeo: si la app pasa a segundo
+            // plano el sondeo se detiene, pero la invitación abierta no se cierra
+            poller.invite = scope.launch {
+                StackNavigator.goAndWait(Destination.PairingInvite(pairingId))
+                // Se marca como leída cuando el usuario cierra la invitación
+                try {
+                    AlertRepository.markSeen(alert.id, me)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.d(TAG, "Error marking read: $e")
                 }
-                break // una invitación a la vez
             }
         } catch (e: CancellationException) {
             throw e
@@ -78,10 +98,21 @@ fun HomeShell() {
         }
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(POLL_EVERY_MS)
-            pollAlerts()
+    // Sondeo cada 10 s en su propia coroutine. LaunchedEffect la cancela al salir del home
+    // (cerrar sesión, resetTo) y repeatOnLifecycle la pausa mientras la app está en segundo plano
+    // y la vuelve a arrancar al regresar.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        try {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Log.d(TAG, "▶️ Polling started")
+                while (isActive) {
+                    pollAlerts()
+                    delay(POLL_EVERY_MS)
+                }
+            }
+        } finally {
+            Log.d(TAG, "⏹️ Polling stopped")
         }
     }
 
