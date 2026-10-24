@@ -56,7 +56,7 @@ class NetworkMonitor(context: Context) : NetworkStatus {
 
     private fun publish() {
         val now = validated.isNotEmpty()
-        if (state.value != now) Log.d(TAG, if (now) "Online" else "Offline")
+        if (state.value != now) Log.d(TAG, if (now) " Online" else "Offline")
         state.value = now
     }
 
