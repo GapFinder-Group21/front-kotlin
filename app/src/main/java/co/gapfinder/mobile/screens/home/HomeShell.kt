@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import co.gapfinder.mobile.data.AlertRepository
 import co.gapfinder.mobile.domain.AlertKind
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.screens.hangouts.HangoutMapTab
 import co.gapfinder.mobile.ui.kit.DockBar
@@ -32,7 +33,7 @@ import co.gapfinder.mobile.ui.theme.Palette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val TAG = "HomeShell"
@@ -105,10 +106,19 @@ fun HomeShell() {
     LaunchedEffect(lifecycle) {
         try {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                Log.d(TAG, "▶️ Polling started")
-                while (isActive) {
-                    pollAlerts()
-                    delay(POLL_EVERY_MS)
+                // Sin red no se consulta: collectLatest cancela el ciclo al perder la red
+                // y lo vuelve a arrancar (con una revisión inmediata) cuando vuelve
+                Connectivity.online.collectLatest { online ->
+                    if (!online) {
+                        Log.d(TAG, "⏸️ Polling paused (offline)")
+                        return@collectLatest
+                    }
+                    Log.d(TAG, "▶️ Polling started")
+                    // delay lanza CancellationException cuando se cancela el ciclo, y ahí termina
+                    while (true) {
+                        pollAlerts()
+                        delay(POLL_EVERY_MS)
+                    }
                 }
             }
         } finally {
