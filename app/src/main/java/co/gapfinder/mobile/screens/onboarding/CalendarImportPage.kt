@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.CalendarBridge
+import co.gapfinder.mobile.data.CalendarImportFault
+import co.gapfinder.mobile.data.CalendarImportReport
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
@@ -42,6 +44,7 @@ import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private const val IMPORT_TAG = "CalendarImport"
@@ -73,17 +76,21 @@ fun CalendarImportPage() {
             CalendarBridge.pullTimetable()
             Log.d(IMPORT_TAG, "✅ IMPORT: Success (Standard)")
             stage = ImportStage.Done
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val text = e.importDartText()
             Log.d(IMPORT_TAG, "⚠️ IMPORT ERROR/CONFLICT: $text")
             // Un 409 significa conflicto, pero los datos ya existen
-            if (text.contains("409")) {
+            if ((e as? CalendarImportFault)?.status == 409 || text.contains("409")) {
                 Log.d(IMPORT_TAG, "ℹ️ IMPORT: Conflict 409 detected, but data persists. Marking as success.")
                 stage = ImportStage.Done
                 return
             }
             stage = ImportStage.Failed
             failure = text
+            // BQ 1: se reporta el tipo de error al backend (o se encola si no hay red) sin frenar la pantalla
+            scope.launch { CalendarImportReport.report(e) }
         }
     }
 
