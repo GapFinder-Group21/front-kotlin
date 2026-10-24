@@ -36,6 +36,9 @@ data class SavedHangout(val hangout: Hangout, val joined: Boolean, val savedAt: 
 /** Catálogo guardado y el momento en que se bajó del backend. */
 data class SavedCatalog<T>(val items: List<T>, val savedAt: LocalDateTime)
 
+/** Última versión conocida de una pantalla (JSON) y cuándo se guardó. */
+data class SavedSnapshot(val json: JSONObject, val savedAt: LocalDateTime)
+
 /**
  * Puerta de entrada al almacenamiento local. Las pantallas guardan y leen modelos del dominio
  * (Lecture, FreeWindow, Hangout) y aquí se traducen a las entidades de Room, igual que
@@ -142,6 +145,20 @@ object LocalStore {
         val row = db.catalogs().of(name) ?: return null
         return SavedCatalog(JSONArray(row.json).mapNodes(decode), row.savedAt)
     }
+
+    // ============================================================ Instantáneas de pantallas
+
+    /**
+     * Guarda la última versión conocida de una pantalla para mostrarla sin red (por ejemplo,
+     * la lista de amigos). Usa la misma tabla que los catálogos, con una clave por pantalla y usuario,
+     * así que no cambia el esquema de Room. [savedAt] se pasa cuando se edita lo guardado sin red,
+     * para no hacerlo pasar por recién bajado del backend.
+     */
+    suspend fun saveSnapshot(key: String, json: JSONObject, savedAt: LocalDateTime = LocalDateTime.now()) =
+        db.catalogs().save(CatalogEntity(key, json.toString(), savedAt))
+
+    suspend fun snapshot(key: String): SavedSnapshot? =
+        db.catalogs().of(key)?.let { SavedSnapshot(JSONObject(it.json), it.savedAt) }
 
     // ============================================================ Borrador del wizard
 
