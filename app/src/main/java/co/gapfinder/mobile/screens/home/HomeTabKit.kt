@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import java.io.IOException
 
 // Utilidades compartidas por las pestañas del home.
 
@@ -43,3 +44,6 @@ internal fun twelveHourClock(hour: Int, minute: Int): String {
 
 /** Texto de error como lo mostraba Dart con `${error}` sobre un Exception. */
 internal fun Throwable.dartStyleText(): String = "Exception: ${message ?: toString()}"
+
+/** No hay red y tampoco hay nada guardado que mostrar. El mensaje explica qué pasa con la pantalla. */
+internal class OfflineFault(message: String) : IOException(message)

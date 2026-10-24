@@ -39,12 +39,15 @@ import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Lecture
 import co.gapfinder.mobile.domain.Weekday
 import co.gapfinder.mobile.foundation.Chrono
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
-    
+
 private enum class SlotKind { Lecture, Break }
 
 private data class AgendaSlot(
@@ -64,20 +67,32 @@ private data class Timetable(val lectures: List<Lecture>, val windows: List<Free
 fun TimetableTab(isActive: Boolean) {
     var cycle by remember { mutableIntStateOf(0) }
     var outcome by remember { mutableStateOf<Fetch<Timetable>>(Fetch.Waiting) }
+    // true mientras lo que se ve es la copia de Room y no la respuesta del backend
+    var showingSaved by remember { mutableStateOf(false) }
+    val online by rememberOnline()
 
-    LaunchedEffect(cycle) {
+    // También corre cuando cambia la red: sin red muestra lo guardado y al volver actualiza solo
+    LaunchedEffect(cycle, online) {
         // Primero lo guardado en Room, para no dejar la pestaña vacía mientras responde la red
         val saved = savedTimetable()
         outcome = if (saved != null) Fetch.Done(saved) else Fetch.Waiting
-        outcome = try {
+        showingSaved = saved != null
+
+        if (!Connectivity.isOnline()) {
+            if (saved == null) outcome = Fetch.Broken(OfflineFault("No connection. Your schedule shows up here when you're back online."))
+            return@LaunchedEffect
+        }
+
+        try {
             // La primera vez se usa lo que HomeWarmup ya cargó en paralelo; si falló, se intenta de nuevo
             val warm = SessionVault.memberId()?.let { HomeWarmup.takeTimetable(it) }?.getOrNull()
-            Fetch.Done(warm?.let { Timetable(it.lectures, it.windows) } ?: fetchTimetable())
+            outcome = Fetch.Done(warm?.let { Timetable(it.lectures, it.windows) } ?: fetchTimetable())
+            showingSaved = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Si la red falla se queda lo guardado; el error solo se muestra si no hay nada
-            if (saved != null) Fetch.Done(saved) else Fetch.Broken(e)
+            if (saved == null) outcome = Fetch.Broken(e)
         }
     }
 
@@ -108,12 +123,19 @@ fun TimetableTab(isActive: Boolean) {
             when (val state = outcome) {
                 Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
 
-                is Fetch.Broken -> Text(
-                    text = "No se pudo cargar tu horario.\n${state.cause.dartStyleText()}",
-                    textAlign = TextAlign.Center,
-                    style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.6f)),
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                )
+                is Fetch.Broken -> if (state.cause is OfflineFault) {
+                    OfflineNote(
+                        text = state.cause.message ?: "",
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                } else {
+                    Text(
+                        text = "No se pudo cargar tu horario.\n${state.cause.dartStyleText()}",
+                        textAlign = TextAlign.Center,
+                        style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.6f)),
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                }
 
                 is Fetch.Done -> if (state.value.lectures.isEmpty() && state.value.windows.isEmpty()) {
                     Text(
@@ -128,6 +150,10 @@ fun TimetableTab(isActive: Boolean) {
                             .verticalScroll(rememberScrollState())
                             .padding(16.dp)
                     ) {
+                        if (showingSaved && !online) {
+                            OfflineNote("No connection · showing your saved schedule")
+                            Spacer(Modifier.height(12.dp))
+                        }
                         TodayAgenda(state.value)
                     }
                 }
@@ -276,4 +302,3 @@ private fun SlotCard(
         }
     }
 }
-
