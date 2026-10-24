@@ -26,9 +26,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.WindowRepository
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.PairingFocus
+import co.gapfinder.mobile.foundation.Connectivity
+import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
@@ -41,14 +46,24 @@ import kotlinx.coroutines.CancellationException
 @Composable
 fun WindowDetailPage(windowId: Int) {
     var outcome by remember { mutableStateOf<Fetch<FreeWindow>>(Fetch.Waiting) }
+    val online by rememberOnline()
 
-    LaunchedEffect(windowId) {
-        outcome = try {
-            Fetch.Done(WindowRepository.byId(windowId))
+    // También corre cuando cambia la red: sin red sale de Room y al volver se actualiza del backend
+    LaunchedEffect(windowId, online) {
+        // El GAP ya está en Room con el horario de la semana
+        val saved = savedWindow(windowId)
+        if (!Connectivity.isOnline()) {
+            outcome = if (saved != null) Fetch.Done(saved)
+            else Fetch.Broken(OfflineFault("No connection. This GAP isn't saved on your phone yet."))
+            return@LaunchedEffect
+        }
+        if (saved != null) outcome = Fetch.Done(saved)
+        try {
+            outcome = Fetch.Done(WindowRepository.byId(windowId))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Fetch.Broken(e)
+            if (saved == null) outcome = Fetch.Broken(e)
         }
     }
 
@@ -63,20 +78,27 @@ fun WindowDetailPage(windowId: Int) {
             when (val state = outcome) {
                 Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
 
-                is Fetch.Broken -> Text(
-                    text = "Error: ${state.cause.dartStyleText()}",
-                    style = Typo.paragraph().copy(fontSize = 14.sp, color = InheritedInk),
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                is Fetch.Broken -> if (state.cause is OfflineFault) {
+                    OfflineNote(
+                        text = state.cause.message ?: "",
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                } else {
+                    Text(
+                        text = "Error: ${state.cause.dartStyleText()}",
+                        style = Typo.paragraph().copy(fontSize = 14.sp, color = InheritedInk),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
 
-                is Fetch.Done -> WindowSummary(state.value)
+                is Fetch.Done -> WindowSummary(state.value, online)
             }
         }
     }
 }
 
 @Composable
-private fun WindowSummary(window: FreeWindow) {
+private fun WindowSummary(window: FreeWindow, online: Boolean) {
     val from = twelveHourClock(window.startsAt.hour, window.startsAt.minute)
     val to = twelveHourClock(window.endsAt.hour, window.endsAt.minute)
     val shape = RoundedCornerShape(16.dp)
@@ -107,15 +129,26 @@ private fun WindowSummary(window: FreeWindow) {
 
         Spacer(Modifier.weight(1f))
 
+        // Buscar match necesita al servidor: sin red el botón se apaga y se explica por qué
+        if (!online) {
+            OfflineNote("No connection · showing your saved GAP. Finding a match needs the server, so it turns on when you're back online.")
+            Spacer(Modifier.height(12.dp))
+        }
         PillButton(
             label = "Find Match for this GAP",
             color = Palette.Coral,
-            onClick = {
+            onClick = if (online) ({
                 // La búsqueda parte del dueño del GAP con el modo por defecto
                 window.ownerId?.let { owner ->
                     StackNavigator.go(Destination.PairingSearch(owner, PairingFocus.Career))
                 }
-            },
+            }) else null,
         )
     }
+}
+
+/** El GAP guardado en Room con el horario de la semana, si está. */
+private suspend fun savedWindow(windowId: Int): FreeWindow? {
+    val me = SessionVault.memberId() ?: return null
+    return LocalStore.timetableOf(me)?.windows?.firstOrNull { it.id == windowId }
 }
