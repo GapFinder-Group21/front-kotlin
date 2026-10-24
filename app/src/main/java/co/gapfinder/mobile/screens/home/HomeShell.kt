@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,11 +46,17 @@ fun HomeShell() {
     val handledInvites = remember { mutableSetOf<Int>() } // para no repetir pop-ups
     val scope = rememberCoroutineScope()
 
+    // Al entrar al home se lanzan en paralelo horario, gaps, notificaciones y recomendaciones.
+    // Va en remember (antes de componer las pestañas) para que su primera carga ya las encuentre en vuelo.
+    remember { SessionVault.memberId()?.let { HomeWarmup.start(scope, it) } }
+    DisposableEffect(Unit) { onDispose { HomeWarmup.clear() } }
+
     // Revisa las notificaciones y abre la invitación si llegó una solicitud de match nueva
     suspend fun pollAlerts() {
         val me = SessionVault.memberId() ?: return
         try {
-            val inbox = AlertRepository.inboxOf(me)
+            // La primera revisión usa las notificaciones que ya trajo HomeWarmup
+            val inbox = HomeWarmup.takeAlerts(me)?.getOrNull() ?: AlertRepository.inboxOf(me)
             for (alert in inbox) {
                 val pairingId = alert.relatedId ?: continue
                 if (alert.seen || alert.kind != AlertKind.PairingAsked || pairingId in handledInvites) continue
