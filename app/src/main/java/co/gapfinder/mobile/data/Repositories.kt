@@ -46,12 +46,13 @@ import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
- 
+
 private const val TAG = "Repo"
 
 private fun encodeParam(value: String): String =
     URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
+// Las listas se parsean en Dispatchers.Default (ver decodeOffMain), no en el hilo de quien llama
 private suspend fun <T> Reply.many(mapper: (JSONObject) -> T): List<T> =
     decodeOffMain { jsonList.mapNodes(mapper) }
 
@@ -313,14 +314,19 @@ object WindowRepository {
 
 // ============================================================ Google Calendar
 
+/** La importación de Google respondió con un código distinto de 200. Lleva el código para clasificar el error (BQ 1). */
+class CalendarImportFault(val status: Int, val detail: String) :
+    Exception("Error al importar el horario: $status")
+
 object CalendarBridge {
     /** GET /google/auth-url */
     suspend fun authorizationLink(): String =
         HttpGateway.fetch("/google/auth-url").expect(200, "Error al obtener la URL de Google").json.getString("url")
 
-    /** POST /google/import-schedule */
+    /** POST /google/import-schedule — lanza [CalendarImportFault] si el backend no responde 200. */
     suspend fun pullTimetable(): Boolean {
-        HttpGateway.send("/google/import-schedule").expect(200, "Error al importar el horario")
+        val reply = HttpGateway.send("/google/import-schedule")
+        if (reply.code != 200) throw CalendarImportFault(reply.code, reply.text.take(300))
         return true
     }
 }
@@ -624,7 +630,9 @@ object RecommendationRepository {
     suspend fun hangoutsFor(memberId: Int): Recommendation {
         val reply = HttpGateway.fetch("/recommendations/user/$memberId/open-tables")
         Log.d(TAG, "REC userId=$memberId status=${reply.code} body=${reply.text}")
-        return Recommendation.decode(reply.expect(200, "Error getting recommendations").json)
+        reply.expect(200, "Error getting recommendations")
+        // Trae las open tables anidadas: también se parsea fuera del hilo principal
+        return decodeOffMain { Recommendation.decode(reply.json) }
     }
 }
 
