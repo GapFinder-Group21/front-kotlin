@@ -32,10 +32,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.gapfinder.mobile.data.PairingRepository
+import co.gapfinder.mobile.data.outbox.Outbox
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.Pairing
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
@@ -55,6 +59,7 @@ fun PairingInvitePage(pairingId: Int) {
     var fetching by remember { mutableStateOf(true) }
     var answering by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val online by rememberOnline()
 
     LaunchedEffect(Unit) {
         try {
@@ -83,12 +88,24 @@ fun PairingInvitePage(pairingId: Int) {
         return
     }
 
+    // Sin red la respuesta va a la cola de acciones y sale sola cuando vuelva la conexión
+    suspend fun answerLater(me: Int, accept: Boolean) {
+        Outbox.enqueueRequest("PATCH", PairingRepository.answerPath(loaded.id, me, accept))
+        val verb = if (accept) "accepted" else "declined"
+        Toaster.show("Invitation $verb. It syncs when you're back online.")
+        StackNavigator.back()
+    }
+
     val takeIt: () -> Unit = {
         answering = true
         scope.launch {
             try {
                 val me = SessionVault.memberId() ?: run {
                     answering = false
+                    return@launch
+                }
+                if (!Connectivity.isOnline()) {
+                    answerLater(me, accept = true)
                     return@launch
                 }
                 val updated = PairingRepository.approve(loaded.id, me)
@@ -111,6 +128,10 @@ fun PairingInvitePage(pairingId: Int) {
             try {
                 val me = SessionVault.memberId() ?: run {
                     answering = false
+                    return@launch
+                }
+                if (!Connectivity.isOnline()) {
+                    answerLater(me, accept = false)
                     return@launch
                 }
                 PairingRepository.decline(loaded.id, me)
@@ -172,6 +193,11 @@ fun PairingInvitePage(pairingId: Int) {
             }
 
             Spacer(Modifier.height(48.dp))
+
+            if (!online) {
+                OfflineNote("No connection. Your answer is saved and sent when you're back online.")
+                Spacer(Modifier.height(16.dp))
+            }
 
             if (answering) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

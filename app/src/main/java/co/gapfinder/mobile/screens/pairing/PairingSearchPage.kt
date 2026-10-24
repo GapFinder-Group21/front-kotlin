@@ -36,6 +36,7 @@ import co.gapfinder.mobile.data.PairingRepository
 import co.gapfinder.mobile.data.WindowRepository
 import co.gapfinder.mobile.domain.PairingFocus
 import co.gapfinder.mobile.foundation.Chrono
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
@@ -56,6 +57,11 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
     var outcome by remember { mutableStateOf<LookupOutcome?>(null) }
 
     LaunchedEffect(Unit) {
+        // Los candidatos los calcula el servidor: sin red no se busca
+        if (!Connectivity.isOnline()) {
+            outcome = LookupOutcome.Broke("No connection. Finding a match needs the server. Try again when you're back online.")
+            return@LaunchedEffect
+        }
         try {
             // El match se arma sobre el GAP que el usuario tiene corriendo ahora
             val now = Chrono.now()

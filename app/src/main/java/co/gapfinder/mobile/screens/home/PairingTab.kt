@@ -38,13 +38,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.PairingRepository
 import co.gapfinder.mobile.data.WindowRepository
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Pairing
 import co.gapfinder.mobile.domain.PairingFocus
 import co.gapfinder.mobile.foundation.Chrono
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.FocusSelector
 import co.gapfinder.mobile.ui.kit.Glyphs
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PulseMatchButton
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
@@ -72,6 +76,7 @@ fun PairingTab(isActive: Boolean) {
     var livePairing by remember { mutableStateOf<Pairing?>(null) }
     var myId by remember { mutableStateOf<Int?>(null) }
     var checkedAt by remember { mutableStateOf<LocalDateTime?>(null) }
+    val online by rememberOnline()
 
     // GAP que está corriendo ahora mismo, entre los de la semana del usuario
     suspend fun probeWindow(): FreeWindow? {
@@ -79,19 +84,23 @@ fun PairingTab(isActive: Boolean) {
         myId = me
         val now = Chrono.now()
         checkedAt = now
+        // Sin red (o si la red falla) se busca en el horario guardado en Room
+        if (!Connectivity.isOnline()) return savedLiveWindow(me, now)
         return try {
             WindowRepository.weekOf(me).firstOrNull { it.isLiveAt(now) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.d(LOG_TAG, "Advertencia: No se pudieron cargar los GAPs en Match: $e")
-            null
+            savedLiveWindow(me, now)
         }
     }
 
     // Match aceptado en curso: mientras exista se bloquea el botón
     suspend fun probePairing(): Pairing? {
         val me = SessionVault.memberId() ?: return null
+        // Sin red no se puede saber; igual el botón queda apagado
+        if (!Connectivity.isOnline()) return null
         return try {
             PairingRepository.ongoingFor(me).also { found ->
                 Log.d(
@@ -108,7 +117,8 @@ fun PairingTab(isActive: Boolean) {
         }
     }
 
-    LaunchedEffect(cycle) {
+    // También corre cuando cambia la red
+    LaunchedEffect(cycle, online) {
         fetching = true
         coroutineScope {
             val windowJob = async { probeWindow() }
@@ -173,12 +183,18 @@ fun PairingTab(isActive: Boolean) {
 
                 if (pairing != null) LivePairingBanner()
 
+                // Buscar candidatos necesita al servidor: sin red el botón se apaga y se explica por qué
+                if (!online) {
+                    OfflineNote("No connection. Finding a match needs the server, so search turns on when you're back online.")
+                    Spacer(Modifier.height(24.dp))
+                }
+
                 PulseMatchButton(
                     onTap = {
                         val me = myId
-                        if (me != null) StackNavigator.go(Destination.PairingSearch(me, focus))
+                        if (me != null && Connectivity.isOnline()) StackNavigator.go(Destination.PairingSearch(me, focus))
                     },
-                    enabled = ready,
+                    enabled = ready && online,
                 )
 
                 Spacer(Modifier.height(28.dp))
@@ -188,6 +204,10 @@ fun PairingTab(isActive: Boolean) {
         }
     }
 }
+
+/** GAP corriendo en [now] según el horario guardado en Room. */
+private suspend fun savedLiveWindow(memberId: Int, now: LocalDateTime): FreeWindow? =
+    LocalStore.timetableOf(memberId)?.windows?.firstOrNull { it.isLiveAt(now) }
 
 private fun clockOf(moment: LocalDateTime): String = twelveHourClock(moment.hour, moment.minute)
 
