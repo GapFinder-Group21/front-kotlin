@@ -56,8 +56,8 @@ private fun twelveHourClock(moment: LocalDateTime): String {
 }
 
 /**
- * Pantalla "¡Match encontrado!" (antes MatchFoundScreen).
- * [currentWindowId] es el GAP de quien busca; el del candidato viene en [prospect].
+ * "Match Found!" screen (formerly MatchFoundScreen).
+ * [currentWindowId] is the GAP of the person searching; the candidate's comes in [prospect].
  */
 @Composable
 fun PairingCandidatePage(memberId: Int, currentWindowId: Int, prospect: PairingProspect) {
@@ -71,7 +71,7 @@ fun PairingCandidatePage(memberId: Int, currentWindowId: Int, prospect: PairingP
         scope.launch {
             requesting = true
             try {
-                // Sin el usuario del candidato no hay a quién esperar en la pantalla siguiente
+                // Without the candidate's user there is nobody to wait for on the next screen
                 val person = candidate ?: throw IllegalStateException("Candidate user not found")
                 val created = PairingRepository.propose(currentWindowId, theirWindow.id, prospect.score)
                 StackNavigator.swap(Destination.PairingPending(created.id, memberId, person))
@@ -137,7 +137,7 @@ fun PairingCandidatePage(memberId: Int, currentWindowId: Int, prospect: PairingP
     }
 }
 
-/** Tiempo libre del candidato. */
+/** Candidate's free time. */
 @Composable
 private fun WindowSummary(window: FreeWindow) {
     val shape = RoundedCornerShape(16.dp)

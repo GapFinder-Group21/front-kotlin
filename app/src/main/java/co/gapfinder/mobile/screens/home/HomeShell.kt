@@ -39,37 +39,37 @@ import kotlinx.coroutines.launch
 private const val TAG = "HomeShell"
 private const val POLL_EVERY_MS = 10_000L
 
-/** Compone la pestaña siempre (como IndexedStack) pero solo la coloca si está seleccionada. */
+/** Always composes the tab (like IndexedStack) but only places it when it is selected. */
 private fun Modifier.onlyWhen(visible: Boolean) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     layout(placeable.width, placeable.height) { if (visible) placeable.place(0, 0) }
 }
 
-/** Invitación que abrió el sondeo (no es estado de UI: cambiarla no debe recomponer). */
+/** The invitation that opened the poll (not UI state: changing it must not trigger recomposition). */
 private class PollerState {
     var invite: Job? = null
 }
 
-/** Contenedor principal con las 5 pestañas y la barra inferior (antes MainScreen). */
+/** Main container with the 5 tabs and the bottom bar (formerly MainScreen). */
 @Composable
 fun HomeShell() {
     var selected by rememberSaveable { mutableStateOf(DockTab.Schedule) }
-    val handledInvites = remember { mutableSetOf<Int>() } // para no repetir pop-ups
+    val handledInvites = remember { mutableSetOf<Int>() } // to avoid showing the same pop-up twice
     val poller = remember { PollerState() }
     val scope = rememberCoroutineScope()
 
-    // Al entrar al home se lanzan en paralelo horario, gaps, notificaciones y recomendaciones.
-    // Va en remember (antes de componer las pestañas) para que su primera carga ya las encuentre en vuelo.
+    // On entering home, schedule, gaps, notifications and recommendations are launched in parallel.
+    // It goes inside remember (before composing the tabs) so their first load already finds the results in flight.
     remember { SessionVault.memberId()?.let { HomeWarmup.start(scope, it) } }
     DisposableEffect(Unit) { onDispose { HomeWarmup.clear() } }
 
-    // Revisa las notificaciones y abre la invitación si llegó una solicitud de match nueva
+    // Checks notifications and opens the invitation if a new match request arrived
     suspend fun pollAlerts() {
         val me = SessionVault.memberId() ?: return
-        // Una invitación a la vez: mientras haya una abierta no se busca otra
+        // One invitation at a time: while one is open, no new one is looked up
         if (poller.invite?.isActive == true) return
         try {
-            // La primera revisión usa las notificaciones que ya trajo HomeWarmup
+            // The first check uses the notifications already fetched by HomeWarmup
             val inbox = HomeWarmup.takeAlerts(me)?.getOrNull() ?: AlertRepository.inboxOf(me)
             val alert = inbox.firstOrNull { alert ->
                 val pairingId = alert.relatedId
@@ -77,13 +77,13 @@ fun HomeShell() {
             } ?: return
             val pairingId = alert.relatedId ?: return
 
-            Log.d(TAG, "🎯 MATCH REQUEST DETECTED! MatchID: $pairingId")
+            Log.d(TAG, "MATCH REQUEST DETECTED! MatchID: $pairingId")
             handledInvites += pairingId
-            // La invitación va en el scope del home, no en el del sondeo: si la app pasa a segundo
-            // plano el sondeo se detiene, pero la invitación abierta no se cierra
+            // The invitation runs in the home scope, not the poll scope: if the app goes to the
+            // background the poll stops, but an already-open invitation is not dismissed
             poller.invite = scope.launch {
                 StackNavigator.goAndWait(Destination.PairingInvite(pairingId))
-                // Se marca como leída cuando el usuario cierra la invitación
+                // Marked as read when the user closes the invitation
                 try {
                     AlertRepository.markSeen(alert.id, me)
                 } catch (e: CancellationException) {
@@ -95,26 +95,26 @@ fun HomeShell() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.d(TAG, "⚠️ POLLER ERROR: $e")
+            Log.d(TAG, "POLLER ERROR: $e")
         }
     }
 
-    // Sondeo cada 10 s en su propia coroutine. LaunchedEffect la cancela al salir del home
-    // (cerrar sesión, resetTo) y repeatOnLifecycle la pausa mientras la app está en segundo plano
-    // y la vuelve a arrancar al regresar.
+    // Polls every 10 s in its own coroutine. LaunchedEffect cancels it when leaving home
+    // (sign-out, resetTo) and repeatOnLifecycle pauses it while the app is in the background
+    // and restarts it on return.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         try {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // Sin red no se consulta: collectLatest cancela el ciclo al perder la red
-                // y lo vuelve a arrancar (con una revisión inmediata) cuando vuelve
+                // No network means no polling: collectLatest cancels the loop on network loss
+                // and restarts it (with an immediate check) when connectivity returns
                 Connectivity.online.collectLatest { online ->
                     if (!online) {
-                        Log.d(TAG, "⏸️ Polling paused (offline)")
+                        Log.d(TAG, "Polling paused (offline)")
                         return@collectLatest
                     }
-                    Log.d(TAG, "▶️ Polling started")
-                    // delay lanza CancellationException cuando se cancela el ciclo, y ahí termina
+                    Log.d(TAG, "Polling started")
+                    // delay throws CancellationException when the loop is cancelled, ending it there
                     while (true) {
                         pollAlerts()
                         delay(POLL_EVERY_MS)
@@ -122,7 +122,7 @@ fun HomeShell() {
                 }
             }
         } finally {
-            Log.d(TAG, "⏹️ Polling stopped")
+            Log.d(TAG, "Polling stopped")
         }
     }
 

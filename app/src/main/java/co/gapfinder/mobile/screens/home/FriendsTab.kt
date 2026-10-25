@@ -96,12 +96,12 @@ import java.time.LocalDateTime
 
 private const val LOG_TAG = "FriendsTab"
 
-/** Primario del tema M3: borde del buscador cuando tiene el foco. */
+/** Primary M3 theme color: search bar border when focused. */
 private val FocusedEdge = Color(0xFF65558F)
 
 private data class FreeBuddy(val member: Member, val window: FreeWindow?)
 
-/** Solicitud de amistad recibida, con quien la envió. */
+/** Incoming friend request with its sender. */
 private data class BondAsk(val bondId: Int, val sender: Member)
 
 private data class BuddyRoster(
@@ -112,13 +112,13 @@ private data class BuddyRoster(
     val isEmpty: Boolean get() = available.isEmpty() && attending.isEmpty() && asks.isEmpty()
 }
 
-/** Amigo con sus GAPs de la semana. */
+/** Friend with their week's GAPs. */
 private data class FriendWeek(val member: Member, val windows: List<FreeWindow>)
 
 /**
- * Lo que se trae del backend y se guarda en Room. Se guardan los GAPs de la semana de cada amigo
- * (no solo quién tiene GAP ahora) para que, sin red, "With GAP now" e "In class" se calculen
- * con la hora del momento y no con la de la última vez que hubo conexión.
+ * What is fetched from the backend and saved in Room. Each friend's week GAPs are saved
+ * (not just who has a GAP now) so that, offline, "With GAP now" and "In class" are calculated
+ * from the current time and not from the last time there was a connection.
  */
 private data class RosterSnapshot(val friends: List<FriendWeek>, val asks: List<BondAsk>) {
     fun rosterAt(now: LocalDateTime): BuddyRoster {
@@ -131,7 +131,7 @@ private data class RosterSnapshot(val friends: List<FriendWeek>, val asks: List<
         return BuddyRoster(available, attending, asks)
     }
 
-    /** La solicitud respondida sale de la lista; si se aceptó, quien la envió pasa a ser amigo. */
+    /** The answered request is removed from the list; if accepted, the sender becomes a friend. */
     fun answered(bondId: Int, accepted: Boolean): RosterSnapshot {
         val ask = asks.firstOrNull { it.bondId == bondId } ?: return this
         val newFriend = accepted && friends.none { it.member.id == ask.sender.id }
@@ -158,48 +158,48 @@ private data class RosterSnapshot(val friends: List<FriendWeek>, val asks: List<
     }
 }
 
-/** Clave en Room de la última lista de amigos del usuario. */
+/** Key in Room for the user's last friend list. */
 private fun rosterKey(memberId: Int) = "friends:$memberId"
 
-/** Aplica las respuestas hechas sin red, que todavía pueden no haber llegado al backend. */
+/** Applies offline answers that may not have reached the backend yet. */
 private fun RosterSnapshot.withAnswers(answers: Map<Int, Boolean>): RosterSnapshot =
     answers.entries.fold(this) { acc, (bondId, accepted) -> acc.answered(bondId, accepted) }
 
-/** Búsqueda en curso (no es estado de UI: cambiarla no debe recomponer). */
+/** Active search (not UI state: changing it must not trigger recomposition). */
 private class LookupHandle {
     var job: Job? = null
 }
 
 /**
- * Pestaña de amigos: buscador de usuarios, solicitudes recibidas, quién tiene GAP ahora
- * y quién está en clase (antes FriendsScreen). Sin red muestra la última lista guardada,
- * encola las respuestas a solicitudes y apaga el buscador.
+ * Friends tab: user search, received requests, who has a GAP now
+ * and who is in class (formerly FriendsScreen). Offline it shows the last saved list,
+ * queues request replies, and disables the search bar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendsTab(isActive: Boolean) {
     var cycle by remember { mutableIntStateOf(0) }
-    // Como FutureBuilder: mientras recarga conserva el último dato (lo usa la cabecera)
+    // Like FutureBuilder: while reloading it preserves the last data (used by the header)
     var loading by remember { mutableStateOf(true) }
     var snapshot by remember { mutableStateOf<RosterSnapshot?>(null) }
-    // Cuándo se guardó lo que se ve, si es la copia de Room (null si viene del backend)
+    // When the displayed data was saved, if it is the Room copy (null if from backend)
     var savedAt by remember { mutableStateOf<LocalDateTime?>(null) }
     var failure by remember { mutableStateOf<Throwable?>(null) }
-    // Solicitudes respondidas sin red (bondId → aceptada) que la cola todavía puede no haber enviado
+    // Offline-answered requests (bondId -> accepted) that the queue may not have sent yet
     val answeredOffline = remember { mutableStateMapOf<Int, Boolean>() }
     val online by rememberOnline()
 
-    // Búsqueda de usuarios por nombre
+    // User search by name
     var query by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
     var matches by remember { mutableStateOf<List<Member>>(emptyList()) }
     val lookup = remember { LookupHandle() }
     val scope = rememberCoroutineScope()
 
-    // También corre cuando cambia la red: sin red muestra lo guardado y al volver actualiza solo
+    // Also runs when the network changes: shows saved data offline and auto-refreshes on reconnect
     LaunchedEffect(cycle, online) {
         val me = SessionVault.memberId()
-        // Primero lo guardado en Room, para no dejar la pestaña vacía mientras responde la red (o si no hay)
+        // Room data is loaded first, so the tab is not empty while the network responds (or if offline)
         val saved = me?.let { savedRoster(it) }
         if (snapshot == null && saved != null) {
             snapshot = saved.first
@@ -218,7 +218,7 @@ fun FriendsTab(isActive: Boolean) {
             return@LaunchedEffect
         }
 
-        // El spinner solo sale si no hay nada que mostrar
+        // The spinner only appears if there is nothing to show
         loading = snapshot == null
         try {
             val fresh = collectRoster().withAnswers(answeredOffline)
@@ -229,7 +229,7 @@ fun FriendsTab(isActive: Boolean) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Con algo guardado se sigue mostrando eso; el error solo se ve si no hay nada
+            // With something saved it keeps showing that; the error is only visible if there is nothing
             if (snapshot == null) failure = e
         }
         loading = false
@@ -239,7 +239,7 @@ fun FriendsTab(isActive: Boolean) {
 
     OnTabWake(isActive) { reload() }
 
-    // Busca con cada cambio del texto; la consulta anterior se cancela para que no pise a la nueva
+    // Searches with each text change; the previous query is cancelled so it does not overwrite the new one
     fun search(text: String) {
         query = text
         lookup.job?.cancel()
@@ -261,7 +261,7 @@ fun FriendsTab(isActive: Boolean) {
         }
     }
 
-    // Buscar usuarios necesita al servidor: al perder la red se limpia la búsqueda
+    // User search requires the server: loses the search when the network drops
     LaunchedEffect(online) {
         if (!online) search("")
     }
@@ -291,12 +291,12 @@ fun FriendsTab(isActive: Boolean) {
         scope.launch {
             val me = SessionVault.memberId() ?: return@launch
             if (!Connectivity.isOnline()) {
-                // Sin red la respuesta va a la cola de acciones y sale sola cuando vuelva la conexión
+                // Offline: the reply goes into the action queue and is sent when connectivity returns
                 Outbox.enqueueRequest("PATCH", BondRepository.answerPath(bondId, me, accept))
                 answeredOffline[bondId] = accept
                 snapshot?.answered(bondId, accept)?.let { updated ->
                     snapshot = updated
-                    // Se guarda con la fecha que ya tenía: no es una lista recién bajada del backend
+                    // Saved with the existing timestamp: it is not a freshly downloaded list
                     LocalStore.saveSnapshot(rosterKey(me), updated.encode(), savedAt ?: LocalDateTime.now())
                 }
                 val verb = if (accept) "accepted" else "rejected"
@@ -315,7 +315,7 @@ fun FriendsTab(isActive: Boolean) {
         }
     }
 
-    // Quién tiene GAP ahora se calcula con la hora actual, también sobre la lista guardada
+    // Who has a GAP now is calculated from the current time, also over the saved list
     val roster = snapshot?.rosterAt(Chrono.now())
 
     Column(
@@ -409,7 +409,7 @@ fun FriendsTab(isActive: Boolean) {
     }
 }
 
-/** Última lista de amigos guardada en Room y cuándo se guardó, o null si no hay (o no se puede leer). */
+/** Last saved friend list in Room and when it was saved, or null if none (or unreadable). */
 private suspend fun savedRoster(memberId: Int): Pair<RosterSnapshot, LocalDateTime>? {
     val row = LocalStore.snapshot(rosterKey(memberId)) ?: return null
     return try {
@@ -420,20 +420,20 @@ private suspend fun savedRoster(memberId: Int): Pair<RosterSnapshot, LocalDateTi
     }
 }
 
-/** Trae amigos (con sus GAPs de la semana) y solicitudes pendientes. */
+/** Fetches friends (with their week's GAPs) and pending requests. */
 private suspend fun collectRoster(): RosterSnapshot {
     val me = SessionVault.memberId() ?: return RosterSnapshot(emptyList(), emptyList())
 
     return coroutineScope {
-        // Amigos y solicitudes a la vez
+        // Friends and requests simultaneously
         val everyoneJob = async { BondRepository.friendsOf(me) }
         val incomingJob = async { BondRepository.incomingFor(me) }
         val everyone = everyoneJob.await()
 
-        // Los GAPs de cada amigo en paralelo (antes era una petición por amigo, una tras otra)
+        // Each friend's GAPs in parallel (before it was one request per friend, one after another)
         val weeksJob = everyone.map { friend -> async { WindowRepository.weekOf(friend.id) } }
 
-        // La solicitud puede traer al usuario completo o solo su id; en ese caso se consulta, también en paralelo
+        // The request may include the full user or just their id; in that case it is fetched, also in parallel
         val asks = incomingJob.await().map { bond ->
             async {
                 val sender = bond.requester ?: bond.requesterId?.let { senderId ->
@@ -518,7 +518,7 @@ private fun OverlappingFaces(people: List<Member>) {
     }
 }
 
-/** Buscador de usuarios (TextField con borde, lupa a la izquierda y botón de limpiar). */
+/** User search field (TextField with border, search icon on the left, and a clear button). */
 @Composable
 private fun UserSearchBar(
     text: String,
@@ -585,7 +585,7 @@ private fun UserSearchBar(
     }
 }
 
-/** IconButton de M3: ícono dentro de un área táctil de 48. */
+/** M3 IconButton: icon inside a 48 dp touch area. */
 @Composable
 private fun TapIcon(glyph: ImageVector, tint: Color, iconSize: Dp, onTap: () -> Unit) {
     Box(
@@ -619,7 +619,7 @@ private fun SearchResults(people: List<Member>, onAdd: (Member) -> Unit) {
                     .fillMaxWidth()
                     .background(Palette.White, shape)
                     .border(1.dp, Palette.Ink.fade(0.08f), shape)
-                    .padding(15.dp), // padding de Flutter + ancho del borde
+                    .padding(15.dp), // padding from Flutter design + border width
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FaceBubble(url = person.avatarUrl, diameter = 44.dp, ring = Palette.Ink.fade(0.1f), ringWidth = 1.5.dp)
@@ -631,7 +631,7 @@ private fun SearchResults(people: List<Member>, onAdd: (Member) -> Unit) {
     }
 }
 
-/** Nombre + "carrera · semestre". */
+/** Name + "career · semester". */
 @Composable
 private fun PersonLines(person: Member, modifier: Modifier = Modifier) {
     Column(modifier) {
@@ -647,7 +647,7 @@ private fun PersonLines(person: Member, modifier: Modifier = Modifier) {
     }
 }
 
-/** Botón "Add" (ElevatedButton 70x32 con área táctil de 48). */
+/** "Add" button (ElevatedButton 70x32 with a 48 dp touch area). */
 @Composable
 private fun AddPill(onPress: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
@@ -750,7 +750,7 @@ private fun FreeBuddyCard(buddy: FreeBuddy) {
             .shadow(10.dp, shape, ambientColor = Palette.Ink.fade(0.05f), spotColor = Palette.Ink.fade(0.05f))
             .background(Palette.White, shape)
             .border(1.5.dp, Palette.Teal.fade(0.3f), shape)
-            .padding(1.5.dp) // Container suma el ancho del borde al padding
+            .padding(1.5.dp) // Container adds border width to the padding
     ) {
         Row(
             Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
@@ -825,7 +825,7 @@ private fun FreeBuddyCard(buddy: FreeBuddy) {
 private fun AttendingGrid(people: List<Member>) {
     val density = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // 3 columnas: (ancho - 2 espacios de 12) / 3, calculado en px para que quepan exactas
+        // 3 columns: (width - 2 gaps of 12) / 3, calculated in px so they fit exactly
         val gapPx = with(density) { 12.dp.roundToPx() }
         val cellWidth = with(density) { ((constraints.maxWidth - 2 * gapPx) / 3).toDp() }
         val cardShape = RoundedCornerShape(14.dp)

@@ -65,7 +65,7 @@ private const val LOG_TAG = "PairingTab"
 private val SHORT_DAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 private val SHORT_MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
-/** Pestaña principal de Match: GAP actual, match activo, botón y modo (antes MatchMainScreen). */
+/** Main Match tab: current GAP, active match, button and mode (formerly MatchMainScreen). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PairingTab(isActive: Boolean) {
@@ -78,46 +78,46 @@ fun PairingTab(isActive: Boolean) {
     var checkedAt by remember { mutableStateOf<LocalDateTime?>(null) }
     val online by rememberOnline()
 
-    // GAP que está corriendo ahora mismo, entre los de la semana del usuario
+    // The GAP currently running, from the user's week
     suspend fun probeWindow(): FreeWindow? {
         val me = SessionVault.memberId() ?: return null
         myId = me
         val now = Chrono.now()
         checkedAt = now
-        // Sin red (o si la red falla) se busca en el horario guardado en Room
+        // Offline (or if the network fails) falls back to the timetable saved in Room
         if (!Connectivity.isOnline()) return savedLiveWindow(me, now)
         return try {
             WindowRepository.weekOf(me).firstOrNull { it.isLiveAt(now) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.d(LOG_TAG, "Advertencia: No se pudieron cargar los GAPs en Match: $e")
+            Log.d(LOG_TAG, "Warning: Could not load GAPs in Match tab: $e")
             savedLiveWindow(me, now)
         }
     }
 
-    // Match aceptado en curso: mientras exista se bloquea el botón
+    // Active accepted match: while one exists the button is blocked
     suspend fun probePairing(): Pairing? {
         val me = SessionVault.memberId() ?: return null
-        // Sin red no se puede saber; igual el botón queda apagado
+        // Offline it cannot be determined; either way the button is disabled
         if (!Connectivity.isOnline()) return null
         return try {
             PairingRepository.ongoingFor(me).also { found ->
                 Log.d(
                     LOG_TAG,
-                    if (found != null) "🔒 Active match found! ID=${found.id} blocking match button."
-                    else "🔓 No active ACCEPTED match found for userId=$me.",
+                    if (found != null) "Active match found! ID=${found.id} blocking match button."
+                    else "No active ACCEPTED match found for userId=$me.",
                 )
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.d(LOG_TAG, "❌ Error loading active match: $e")
+            Log.d(LOG_TAG, "Error loading active match: $e")
             null
         }
     }
 
-    // También corre cuando cambia la red
+    // Also runs when the network changes
     LaunchedEffect(cycle, online) {
         fetching = true
         coroutineScope {
@@ -183,7 +183,7 @@ fun PairingTab(isActive: Boolean) {
 
                 if (pairing != null) LivePairingBanner()
 
-                // Buscar candidatos necesita al servidor: sin red el botón se apaga y se explica por qué
+                // Searching for candidates requires the server: offline the button is disabled and explained
                 if (!online) {
                     OfflineNote("No connection. Finding a match needs the server, so search turns on when you're back online.")
                     Spacer(Modifier.height(24.dp))
@@ -205,7 +205,7 @@ fun PairingTab(isActive: Boolean) {
     }
 }
 
-/** GAP corriendo en [now] según el horario guardado en Room. */
+/** Active GAP at [now] from the timetable saved in Room. */
 private suspend fun savedLiveWindow(memberId: Int, now: LocalDateTime): FreeWindow? =
     LocalStore.timetableOf(memberId)?.windows?.firstOrNull { it.isLiveAt(now) }
 
@@ -239,10 +239,10 @@ private fun OpenWindowCard(window: FreeWindow) {
             .fillMaxWidth()
             .background(Palette.White, shape)
             .border(1.5.dp, Palette.Teal.fade(0.3f), shape)
-            // padding de Flutter + ancho del borde
+            // padding from Flutter design + border width
             .padding(horizontal = 19.5.dp, vertical = 17.5.dp)
     ) {
-        // Barra lateral que ocupa todo el alto del contenido
+        // Side bar that spans the full content height
         Box(Modifier.matchParentSize()) {
             Box(
                 Modifier

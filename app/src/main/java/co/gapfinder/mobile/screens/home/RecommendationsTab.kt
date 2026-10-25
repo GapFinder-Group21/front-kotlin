@@ -61,19 +61,19 @@ import java.time.Duration
 import java.time.LocalDateTime
 
 /**
- * Pestaña "Suggest": edificio que más frecuenta el usuario y las mesas abiertas que hay ahí
- * (antes RecommendationsScreen).
+ * "Suggest" tab: the building the user frequents the most and the open tables available there
+ * (formerly RecommendationsScreen).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecommendationsTab(isActive: Boolean) {
     var cycle by remember { mutableIntStateOf(0) }
     var outcome by remember { mutableStateOf<Fetch<Recommendation>>(Fetch.Waiting) }
-    // Cuándo se guardó lo que se ve, si viene del caché sin red (null si viene del backend)
+    // When the currently displayed data was saved, if it comes from cache without network (null if from backend)
     var cachedAt by remember { mutableStateOf<LocalDateTime?>(null) }
     val online by rememberOnline()
 
-    // También corre cuando cambia la red: sin red muestra el caché y al volver actualiza solo
+    // Also runs when the network changes: shows cache when offline and auto-refreshes when back online
     LaunchedEffect(cycle, online) {
         outcome = Fetch.Waiting
         val me = SessionVault.memberId()
@@ -91,14 +91,14 @@ fun RecommendationsTab(isActive: Boolean) {
         }
 
         try {
-            // La primera vez se usa lo que HomeWarmup ya cargó en paralelo; si falló, se intenta de nuevo
+            // On first load, use what HomeWarmup already fetched in parallel; if it failed, try again
             val warm = HomeWarmup.takeRecommendation(me)?.getOrNull()
             outcome = Fetch.Done(warm ?: RecommendationRepository.hangoutsFor(me))
             cachedAt = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Si la red falla y hay algo en el caché, se muestra eso con su fecha
+            // If the network fails and there is something in cache, show it with its timestamp
             val cached = lastKnownRecommendation(me)
             cachedAt = cached?.second
             outcome = if (cached != null) Fetch.Done(cached.first) else Fetch.Broken(e)
@@ -144,7 +144,7 @@ fun RecommendationsTab(isActive: Boolean) {
                 ) {
                     val data = state.value
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-                        // Lo que se ve es del caché: se indica de cuándo es
+                        // The displayed data comes from cache: indicate when it was saved
                         cachedAt?.let { moment ->
                             item { OfflineNote("No connection · ${lastUpdatedText(moment)}") }
                             item { Spacer(Modifier.height(16.dp)) }
@@ -166,9 +166,10 @@ fun RecommendationsTab(isActive: Boolean) {
 }
 
 /**
- * Lo último que el caché en memoria de Nicolás (RecommendationRepository) tiene para el usuario
- * y cuándo se guardó, aunque ya haya pasado el TTL: sin red es mejor algo viejo con su fecha que nada.
- * Es el único punto que depende de la API del caché; si en main quedó con otro nombre, se ajusta aquí.
+ * The latest entry that the in-memory cache in RecommendationRepository holds for the user
+ * and when it was saved, even if the TTL has already expired: offline, stale data with a timestamp
+ * is better than nothing. This is the only point that depends on the cache API; adjust here if the
+ * name changed in main.
  */
 private fun lastKnownRecommendation(memberId: Int): Pair<Recommendation, LocalDateTime>? =
     RecommendationRepository.cachedFor(memberId)?.let { it.value to it.savedAt }
@@ -235,7 +236,7 @@ private fun LoadFailure(detail: String, onRetry: () -> Unit, modifier: Modifier 
     }
 }
 
-/** Tarjeta destacada con el edificio favorito y los minutos acumulados ahí. */
+/** Featured card showing the user's favorite building and total accumulated minutes there. */
 @Composable
 private fun FavoriteSpotCard(data: Recommendation) {
     val shape = RoundedCornerShape(20.dp)
@@ -245,7 +246,7 @@ private fun FavoriteSpotCard(data: Recommendation) {
             .shadow(16.dp, shape, ambientColor = Palette.Teal.fade(0.12f), spotColor = Palette.Teal.fade(0.12f))
             .background(Palette.White, shape)
             .border(2.dp, Palette.Teal, shape)
-            .padding(24.dp) // padding de Flutter + ancho del borde
+            .padding(24.dp) // padding from Flutter design + border width
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -352,7 +353,7 @@ private fun NoSuggestions() {
             .fillMaxWidth()
             .background(Palette.White, shape)
             .border(1.dp, Palette.Ink.fade(0.08f), shape)
-            .padding(41.dp), // padding de Flutter + ancho del borde
+            .padding(41.dp), // padding from Flutter design + border width
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
@@ -387,9 +388,9 @@ private fun SuggestedCard(table: Hangout) {
             .shadow(10.dp, shape, ambientColor = Palette.Ink.fade(0.04f), spotColor = Palette.Ink.fade(0.04f))
             .background(Palette.White, shape)
             .border(1.5.dp, Palette.Teal.fade(0.3f), shape)
-            .padding(1.5.dp) // Container suma el ancho del borde al padding
+            .padding(1.5.dp) // Container adds the border width to the padding
     ) {
-        // Cabecera: anfitrión, lugar y tiempo restante
+        // Header: host, location and remaining time
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -425,7 +426,7 @@ private fun SuggestedCard(table: Hangout) {
             }
         }
 
-        // Título de la mesa
+        // Table title
         Row(
             Modifier
                 .fillMaxWidth()
@@ -443,7 +444,7 @@ private fun SuggestedCard(table: Hangout) {
             )
         }
 
-        // Pie: cupo + botón View
+        // Footer: capacity + View button
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -464,7 +465,7 @@ private fun SuggestedCard(table: Hangout) {
     }
 }
 
-/** ElevatedButton turquesa de pastilla (alto mínimo 40 dentro de un área táctil de 48). */
+/** Teal pill-shaped ElevatedButton (minimum height 40 inside a 48 touch area). */
 @Composable
 private fun TealPill(
     label: String,

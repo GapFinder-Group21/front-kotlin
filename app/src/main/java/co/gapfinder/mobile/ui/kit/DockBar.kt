@@ -33,10 +33,10 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 
-/** Pestañas de la barra inferior. */
+/** Bottom bar tabs. */
 enum class DockTab(val key: String) { Schedule("schedule"), Friends("friends"), Match("match"), Map("map"), Suggest("suggest") }
 
-/** Barra de navegación inferior con el botón central de Match (antes BottomNav). */
+/** Bottom navigation bar with the central Match button (formerly BottomNav). */
 @Composable
 fun DockBar(active: DockTab, onSelect: (DockTab) -> Unit) {
     Box(
@@ -77,7 +77,7 @@ private fun androidx.compose.foundation.layout.RowScope.DockItem(
         Box(contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
             if (isActive) {
-                // Punto indicador debajo del ícono (bottom: -6)
+                // Indicator dot below the icon (bottom: -6)
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -108,7 +108,7 @@ private fun androidx.compose.foundation.layout.RowScope.CenterMatchItem(onSelect
             .fillMaxHeight()
             .plainTap { onSelect(DockTab.Match) },
     ) {
-        // Círculo con borde tricolor que sobresale 24dp por encima de la barra
+        // Tricolor-bordered circle protruding 24 dp above the bar
         Box(
             Modifier
                 .align(Alignment.TopCenter)

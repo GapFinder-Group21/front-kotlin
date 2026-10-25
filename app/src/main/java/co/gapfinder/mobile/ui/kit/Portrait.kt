@@ -18,7 +18,7 @@ import coil.compose.AsyncImage
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.fade
 
-/** Foto de perfil circular con ícono de respaldo (antes AvatarWidget). */
+/** Circular profile photo with a fallback icon (formerly AvatarWidget). */
 @Composable
 fun Portrait(
     url: String?,

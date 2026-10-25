@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "PairingInvite"
 
-/** Invitación de match entrante (antes MatchInvitationScreen). */
+/** Incoming match invitation (formerly MatchInvitationScreen). */
 @Composable
 fun PairingInvitePage(pairingId: Int) {
     var invite by remember { mutableStateOf<Pairing?>(null) }
@@ -79,7 +79,7 @@ fun PairingInvitePage(pairingId: Int) {
         return
     }
 
-    // Quien invita es el dueño del GAP que propuso el match
+    // The inviter is the owner of the GAP that proposed the match
     val sender = loaded.proposer
     if (sender == null) {
         Box(Modifier.fillMaxSize().background(BareScaffoldTone), contentAlignment = Alignment.Center) {
@@ -88,7 +88,7 @@ fun PairingInvitePage(pairingId: Int) {
         return
     }
 
-    // Sin red la respuesta va a la cola de acciones y sale sola cuando vuelva la conexión
+    // Offline: the reply goes into the action queue and is sent when connectivity returns
     suspend fun answerLater(me: Int, accept: Boolean) {
         Outbox.enqueueRequest("PATCH", PairingRepository.answerPath(loaded.id, me, accept))
         val verb = if (accept) "accepted" else "declined"
@@ -109,7 +109,7 @@ fun PairingInvitePage(pairingId: Int) {
                     return@launch
                 }
                 val updated = PairingRepository.approve(loaded.id, me)
-                // Para quien recibe, el candidato es quien envió la solicitud
+                // For the recipient, the candidate is the one who sent the request
                 StackNavigator.swap(
                     Destination.PairingConfirmed(pairingId = updated.id, candidate = updated.proposer ?: sender)
                 )
@@ -155,7 +155,7 @@ fun PairingInvitePage(pairingId: Int) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .background(Palette.Sky) // azul para invitaciones
+                .background(Palette.Sky) // blue for invitations
                 .padding(horizontal = 20.dp, vertical = 18.dp)
         ) {
             Text(
@@ -179,7 +179,7 @@ fun PairingInvitePage(pairingId: Int) {
             InviteCaption("PROPOSAL")
             Spacer(Modifier.height(12.dp))
             val shape = RoundedCornerShape(16.dp)
-            // Sin ancho fijo: se ajusta al texto, como el Container de Flutter
+            // No fixed width: adjusts to the text, like Flutter's Container
             Box(
                 Modifier
                     .background(Palette.White, shape)

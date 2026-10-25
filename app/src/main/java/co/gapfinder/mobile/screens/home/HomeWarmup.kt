@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "HomeWarmup"
 
-/** Corre [block] y devuelve el valor o el error, sin cancelar a las demás cargas si falla. */
+/** Runs [block] and returns the value or the error, without cancelling other loads if it fails. */
 internal inline fun <T> attempt(block: () -> T): Result<T> =
     try {
         Result.success(block())
@@ -33,10 +33,10 @@ internal inline fun <T> attempt(block: () -> T): Result<T> =
     }
 
 /**
- * Carga inicial del home en paralelo. Al entrar al home se lanzan a la vez horario, gaps,
- * notificaciones y recomendaciones (async / awaitAll), en vez de que cada pestaña haga su
- * petición una tras otra. Cada pestaña toma su resultado una sola vez con take*; las recargas
- * siguientes (volver a la pestaña, deslizar para refrescar) ya van directo a la red.
+ * Initial parallel home load. On entering home, schedule, gaps, notifications and recommendations
+ * are launched at the same time (async / awaitAll) instead of each tab making its request
+ * one after another. Each tab takes its result once with take*; subsequent reloads
+ * (returning to the tab, pull-to-refresh) go directly to the network.
  */
 internal object HomeWarmup {
     private var memberId: Int? = null
@@ -44,7 +44,7 @@ internal object HomeWarmup {
     private var alerts: Deferred<Result<List<Alert>>>? = null
     private var recommendation: Deferred<Result<Recommendation>>? = null
 
-    /** Lanza las cargas en [scope] (el del HomeShell, que las cancela si se sale del home). */
+    /** Launches the loads in [scope] (the HomeShell scope, which cancels them if the home is exited). */
     fun start(scope: CoroutineScope, me: Int) {
         val began = SystemClock.elapsedRealtime()
         memberId = me
@@ -54,18 +54,18 @@ internal object HomeWarmup {
         val inbox = scope.async { attempt { AlertRepository.inboxOf(me) } }
         val suggested = scope.async { attempt { RecommendationRepository.hangoutsFor(me) } }
 
-        // El horario se arma con clases + gaps, pero las cuatro peticiones ya van corriendo a la vez
+        // The timetable is assembled from lectures + gaps, but all four requests are already running in parallel
         timetable = scope.async { combineTimetable(me, lectures.await(), windows.await()) }
         alerts = inbox
         recommendation = suggested
 
         scope.launch {
             awaitAll(lectures, windows, inbox, suggested)
-            Log.d(TAG, "⚡ Home cargado en paralelo en ${SystemClock.elapsedRealtime() - began} ms")
+            Log.d(TAG, "Home loaded in parallel in ${SystemClock.elapsedRealtime() - began} ms")
         }
     }
 
-    /** Suelta lo que nadie tomó (al salir del home o cerrar sesión). */
+    /** Releases anything nobody took (on home exit or sign-out). */
     fun clear() {
         memberId = null
         timetable = null
@@ -91,21 +91,21 @@ internal object HomeWarmup {
         return job.await()
     }
 
-    /** Horario completo: clases y gaps en paralelo, y se guarda en Room. Lo usa también TimetableTab al recargar. */
+    /** Full timetable: lectures and gaps in parallel, saved to Room. Also used by TimetableTab on reload. */
     suspend fun loadTimetable(me: Int): SavedTimetable = coroutineScope {
         val lectures = async { LectureRepository.timetableOf(me) }
         val windows = async { syncedWeek(me) }
         saved(me, SavedTimetable(lectures.await(), windows.await()))
     }
 
-    /** Recalcula los gaps de la semana en el backend (sin fallar si no se puede) y los trae. */
+    /** Recalculates the week's gaps on the backend (without failing if it can't) and fetches them. */
     private suspend fun syncedWeek(me: Int): List<FreeWindow> {
         try {
             WindowRepository.generateWeek(me)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.d(TAG, "Advertencia: No se pudieron sincronizar los GAPs con el servidor: $e")
+            Log.d(TAG, "Warning: Could not sync GAPs with the server: $e")
         }
         return WindowRepository.weekOf(me)
     }

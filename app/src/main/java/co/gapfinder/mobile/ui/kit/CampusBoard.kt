@@ -39,7 +39,7 @@ fun CampusBoard(onSpotTap: ((String) -> Unit)? = null) {
             .border(1.5.dp, Palette.Ink.fade(0.1f), shape)
             .clip(shape)
     ) {
-        // Patrón de fondo: grilla de 10 columnas de edificios
+        // Background pattern: grid of 10 columns of buildings
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().alpha(0.05f)) {
             val cell = maxWidth / 10
             val rows = (maxHeight / cell).toInt() + 1

@@ -30,15 +30,15 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import kotlinx.coroutines.delay
 
-// Cuánto se queda el aviso de "volvió la conexión" antes de esconderse
+// How long the "back online" notice stays before hiding
 private const val BACK_ONLINE_MS = 2_000L
 
-/** Qué muestra el banner de conexión. */
+/** What the connection banner shows. */
 enum class BannerMode { Hidden, Offline, BackOnline }
 
 /**
- * Estado del banner: Offline mientras no hay red y BackOnline un par de segundos
- * cuando vuelve (solo si antes se había perdido).
+ * Banner state: Offline while there is no network and BackOnline for a couple of seconds
+ * when it comes back (only if it was previously lost).
  */
 @Composable
 fun rememberBannerMode(): BannerMode {
@@ -58,9 +58,9 @@ fun rememberBannerMode(): BannerMode {
 }
 
 /**
- * Banner global de "sin conexión". Va arriba de todas las pantallas (lo pone AppStage)
- * y ocupa la franja de la barra de estado. Los avisos propios de cada pantalla
- * (qué se bloquea y qué se guarda para después) siguen siendo [OfflineNote].
+ * Global "no connection" banner. Sits above all screens (placed by AppStage)
+ * and occupies the status bar strip. Per-screen notices
+ * (what is blocked and what is saved for later) remain [OfflineNote].
  */
 @Composable
 fun OfflineBanner(mode: BannerMode, modifier: Modifier = Modifier) {
@@ -70,7 +70,7 @@ fun OfflineBanner(mode: BannerMode, modifier: Modifier = Modifier) {
         enter = expandVertically(),
         exit = shrinkVertically(),
     ) {
-        // Solo se esconde después de BackOnline, así que mientras se cierra sigue en verde
+        // Only hidden after BackOnline, so while it is closing it stays green
         val backOnline = mode != BannerMode.Offline
         Row(
             Modifier

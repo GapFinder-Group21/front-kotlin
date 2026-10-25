@@ -27,8 +27,8 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 
 /**
- * Barra superior azul noche (antes CustomTopBar).
- * El padding va por fuera del área segura, igual que en Flutter.
+ * Dark-night top bar (formerly CustomTopBar).
+ * Padding is applied outside the safe area, same as in Flutter.
  */
 @Composable
 fun InkHeader(
@@ -49,7 +49,7 @@ fun InkHeader(
     }
 }
 
-/** Variante con el padding dentro del área segura (antes TopBar). */
+/** Variant with padding inside the safe area (formerly TopBar). */
 @Composable
 fun NightHeader(
     title: String,

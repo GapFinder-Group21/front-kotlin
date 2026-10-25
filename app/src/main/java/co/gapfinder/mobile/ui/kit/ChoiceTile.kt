@@ -21,7 +21,7 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 
-/** Tarjeta blanca con ícono, título y subtítulo (antes ScheduleOptionCard). */
+/** White card with icon, title and subtitle (formerly ScheduleOptionCard). */
 @Composable
 fun ChoiceTile(
     title: String,
@@ -36,7 +36,7 @@ fun ChoiceTile(
             .background(Palette.White, shape)
             .inkTap(shape, onTap = onTap)
             .border(1.5.dp, Palette.Ink.fade(0.15f), shape)
-            .padding(horizontal = 21.5.dp, vertical = 23.5.dp), // incluye el grosor del borde, como Container
+            .padding(horizontal = 21.5.dp, vertical = 23.5.dp), // includes border width, like Container
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon()

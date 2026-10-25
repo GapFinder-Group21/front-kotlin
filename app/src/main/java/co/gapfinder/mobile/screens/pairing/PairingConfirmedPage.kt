@@ -39,15 +39,15 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 
-// Colores de Flutter usados aquí
+// Flutter colors used here
 private val Grey800 = Color(0xFF424242)
 private val White24 = Color(0x3DFFFFFF)
 private val White54 = Color(0x8AFFFFFF)
 private val White70 = Color(0xB3FFFFFF)
 
 /**
- * Pantalla "IT'S A MATCH!" (antes ItsAMatchScreen). Muestra el teléfono de la otra persona
- * para que se pongan de acuerdo por fuera de la app.
+ * "IT'S A MATCH!" screen (formerly ItsAMatchScreen). Shows the other person's phone number
+ * so they can arrange to meet outside the app.
  */
 @Composable
 fun PairingConfirmedPage(pairingId: Int, candidate: Member, suggested: Pastime?, chosen: Pastime?) {
@@ -101,14 +101,14 @@ fun PairingConfirmedPage(pairingId: Int, candidate: Member, suggested: Pastime?,
 
             Spacer(Modifier.height(48.dp))
             BackHomeButton {
-                // Se vuelve a un Home limpio: no quedan pantallas del flujo de match debajo
+                // Navigate back to a clean Home: no match flow screens left below
                 StackNavigator.resetTo(Destination.Home)
             }
         }
     }
 }
 
-/** Teléfono de la otra persona, o un aviso si no lo registró. */
+/** The other person's phone number, or a notice if they didn't register one. */
 @Composable
 private fun PhoneBadge(phoneNumber: String?) {
     val shape = RoundedCornerShape(12.dp)
@@ -116,7 +116,7 @@ private fun PhoneBadge(phoneNumber: String?) {
         modifier = Modifier
             .background(Palette.White.fade(0.1f), shape)
             .border(1.dp, Palette.White.fade(0.2f), shape)
-            .padding(horizontal = 17.dp, vertical = 13.dp), // padding de Flutter + ancho del borde
+            .padding(horizontal = 17.dp, vertical = 13.dp), // padding from Flutter design + border width
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Glyphs.phone, contentDescription = null, tint = Palette.Teal, modifier = Modifier.size(20.dp))
@@ -149,7 +149,7 @@ private fun PastimeCard(pastime: Pastime) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    // Dart: effortType.name.toLowerCase() → "low" / "medium" / "high"
+                    // Dart: effortType.name.toLowerCase() -> "low" / "medium" / "high"
                     text = "${pastime.durationMinutes} minutes · ${pastime.energy.wire.lowercase()}",
                     style = Typo.paragraph().asBody(13f, White54),
                 )
@@ -193,7 +193,7 @@ private fun EnergyBadge(level: EnergyLevel) {
     }
 }
 
-/** ElevatedButton coral de ancho completo (elevación 1 por defecto en M3). */
+/** Full-width coral ElevatedButton (elevation 1 by default in M3). */
 @Composable
 private fun BackHomeButton(onTap: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)

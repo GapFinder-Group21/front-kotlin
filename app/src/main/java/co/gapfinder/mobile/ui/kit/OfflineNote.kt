@@ -25,8 +25,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Aviso dentro de una pantalla que explica qué pasa con esa pantalla sin red
- * (qué se bloquea, qué se guarda para después). El banner global de "sin conexión" es de Daniela.
+ * In-screen notice that explains what happens with that screen when offline
+ * (what is blocked, what is saved for later). The global "no connection" banner is managed by Daniela.
  */
 @Composable
 fun OfflineNote(text: String, modifier: Modifier = Modifier, onDark: Boolean = false) {
@@ -44,7 +44,7 @@ fun OfflineNote(text: String, modifier: Modifier = Modifier, onDark: Boolean = f
     }
 }
 
-/** "Last updated 14:05" (hoy) o "Last updated Oct 18, 14:05" (otro día). */
+/** "Last updated 14:05" (today) or "Last updated Oct 18, 14:05" (another day). */
 fun lastUpdatedText(moment: LocalDateTime): String {
     val pattern = if (moment.toLocalDate() == LocalDate.now()) "HH:mm" else "MMM d, HH:mm"
     return "Last updated ${moment.format(DateTimeFormatter.ofPattern(pattern))}"

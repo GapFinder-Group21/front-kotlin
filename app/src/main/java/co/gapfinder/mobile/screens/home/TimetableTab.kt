@@ -55,25 +55,25 @@ private data class AgendaSlot(
     val title: String,
     val from: String,
     val to: String,
-    /** Minutos desde medianoche, para ordenar. */
+    /** Minutes since midnight, used for sorting. */
     val sortKey: Int,
 )
 
-/** Horario completo del usuario más los GAPs que calculó el backend para la semana. */
+/** Full user timetable plus the GAPs calculated by the backend for the week. */
 private data class Timetable(val lectures: List<Lecture>, val windows: List<FreeWindow>)
 
-/** Pestaña de horario del día (antes ScheduleScreen). */
+/** Schedule tab for the current day (formerly ScheduleScreen). */
 @Composable
 fun TimetableTab(isActive: Boolean) {
     var cycle by remember { mutableIntStateOf(0) }
     var outcome by remember { mutableStateOf<Fetch<Timetable>>(Fetch.Waiting) }
-    // true mientras lo que se ve es la copia de Room y no la respuesta del backend
+    // true while what is displayed is the Room copy and not the backend response
     var showingSaved by remember { mutableStateOf(false) }
     val online by rememberOnline()
 
-    // También corre cuando cambia la red: sin red muestra lo guardado y al volver actualiza solo
+    // Also runs when the network changes: shows saved data offline and auto-refreshes on reconnect
     LaunchedEffect(cycle, online) {
-        // Primero lo guardado en Room, para no dejar la pestaña vacía mientras responde la red
+        // Room data is loaded first, so the tab is not empty while the network responds (or if offline)
         val saved = savedTimetable()
         outcome = if (saved != null) Fetch.Done(saved) else Fetch.Waiting
         showingSaved = saved != null
@@ -84,19 +84,19 @@ fun TimetableTab(isActive: Boolean) {
         }
 
         try {
-            // La primera vez se usa lo que HomeWarmup ya cargó en paralelo; si falló, se intenta de nuevo
+            // On first load, use what HomeWarmup already fetched in parallel; retry if it failed
             val warm = SessionVault.memberId()?.let { HomeWarmup.takeTimetable(it) }?.getOrNull()
             outcome = Fetch.Done(warm?.let { Timetable(it.lectures, it.windows) } ?: fetchTimetable())
             showingSaved = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Si la red falla se queda lo guardado; el error solo se muestra si no hay nada
+            // If the network fails the saved copy is kept; the error is only shown if there is nothing
             if (saved == null) outcome = Fetch.Broken(e)
         }
     }
 
-    // Al volver a la pestaña se recarga sin borrar lo que ya se ve
+    // When the tab becomes active again it reloads without clearing what is already shown
     OnTabWake(isActive) { cycle++ }
 
     Column(
@@ -105,7 +105,7 @@ fun TimetableTab(isActive: Boolean) {
             .background(Palette.Fog)
             .statusBarsPadding()
     ) {
-        // Cabecera oscura
+        // Dark header
         Text(
             text = "GAP FINDER",
             style = Typo.heading(FontWeight.Black).copy(
@@ -130,7 +130,7 @@ fun TimetableTab(isActive: Boolean) {
                     )
                 } else {
                     Text(
-                        text = "No se pudo cargar tu horario.\n${state.cause.dartStyleText()}",
+                        text = "Could not load your schedule.\n${state.cause.dartStyleText()}",
                         textAlign = TextAlign.Center,
                         style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.6f)),
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
@@ -139,7 +139,7 @@ fun TimetableTab(isActive: Boolean) {
 
                 is Fetch.Done -> if (state.value.lectures.isEmpty() && state.value.windows.isEmpty()) {
                     Text(
-                        text = "Aún no tienes clases importadas.",
+                        text = "You have no imported classes yet.",
                         style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.5f)),
                         modifier = Modifier.align(Alignment.Center),
                     )
@@ -162,20 +162,20 @@ fun TimetableTab(isActive: Boolean) {
     }
 }
 
-/** Trae clases + GAPs en paralelo (recalculando los GAPs de la semana) y los guarda en Room. */
+/** Fetches lectures + GAPs in parallel (recalculating the week's GAPs) and saves them in Room. */
 private suspend fun fetchTimetable(): Timetable {
-    val me = SessionVault.memberId() ?: throw Exception("No hay usuario logueado")
+    val me = SessionVault.memberId() ?: throw Exception("No logged-in user found")
     val fresh = HomeWarmup.loadTimetable(me)
     return Timetable(fresh.lectures, fresh.windows)
 }
 
-/** Horario guardado en Room (null si no hay sesión o nunca se guardó). */
+/** Timetable saved in Room (null if there is no session or it was never saved). */
 private suspend fun savedTimetable(): Timetable? {
     val me = SessionVault.memberId() ?: return null
     return LocalStore.timetableOf(me)?.let { Timetable(it.lectures, it.windows) }
 }
 
-/** Clases de hoy y GAPs de hoy en una sola lista ordenada por hora de inicio. */
+/** Today's lectures and today's GAPs merged into a single list sorted by start time. */
 private fun weaveDay(table: Timetable): List<AgendaSlot> {
     val now = Chrono.now()
     val today = Weekday.entries[now.dayOfWeek.value - 1]
@@ -192,7 +192,7 @@ private fun weaveDay(table: Timetable): List<AgendaSlot> {
             )
         }
 
-    // Los GAPs vienen con fecha: de toda la semana solo se muestran los de hoy
+    // GAPs come with a date: from the full week only today's are shown
     val breakSlots = table.windows
         .filter { it.startsAt.toLocalDate() == now.toLocalDate() }
         .map { window ->
@@ -244,7 +244,7 @@ private fun LectureCard(slot: AgendaSlot) {
     )
 }
 
-/** Tarjeta de GAP: mismo bloque que una clase pero en coral. Es informativa, no se puede tocar. */
+/** GAP card: same block as a lecture but in coral. Informational only, not tappable. */
 @Composable
 private fun BreakCard(slot: AgendaSlot) {
     SlotCard(
@@ -276,7 +276,7 @@ private fun SlotCard(
             .fillMaxWidth()
             .background(fill, shape)
             .border(1.5.dp, edge, shape)
-            // padding de Flutter + ancho del borde (Container lo suma)
+            // padding from Flutter design + border width (Container adds them together)
             .padding(horizontal = 17.5.dp, vertical = 15.5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

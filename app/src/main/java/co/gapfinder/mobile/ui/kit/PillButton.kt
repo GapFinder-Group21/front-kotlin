@@ -18,10 +18,10 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 
-/** Color que Flutter M3 aplica al fondo de un ElevatedButton deshabilitado. */
+/** Flutter M3 color applied to the background of a disabled ElevatedButton. */
 val DisabledFill = Color(0x1F1D1B20)
 
-/** Botón principal de ancho completo (antes CustomButton). */
+/** Full-width primary button (formerly CustomButton). */
 @Composable
 fun PillButton(
     label: String,

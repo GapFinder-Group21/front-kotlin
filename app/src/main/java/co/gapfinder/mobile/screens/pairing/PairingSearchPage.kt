@@ -44,7 +44,7 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
 
-/** Aviso que se muestra cuando la búsqueda no lleva a ninguna pantalla. */
+/** Notice shown when the search does not lead to any screen. */
 private sealed interface LookupOutcome {
     data object NobodyFree : LookupOutcome
     data class Broke(val detail: String) : LookupOutcome
@@ -57,13 +57,13 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
     var outcome by remember { mutableStateOf<LookupOutcome?>(null) }
 
     LaunchedEffect(Unit) {
-        // Los candidatos los calcula el servidor: sin red no se busca
+        // Candidates are calculated on the server: no searching without network
         if (!Connectivity.isOnline()) {
             outcome = LookupOutcome.Broke("No connection. Finding a match needs the server. Try again when you're back online.")
             return@LaunchedEffect
         }
         try {
-            // El match se arma sobre el GAP que el usuario tiene corriendo ahora
+            // The match is built on the GAP the user has running right now
             val now = Chrono.now()
             val current = WindowRepository.weekOf(memberId).firstOrNull { it.isLiveAt(now) }
             if (abandoned) return@LaunchedEffect
@@ -77,7 +77,7 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
             if (abandoned) return@LaunchedEffect
 
             if (prospects.isEmpty()) {
-                // Antes de decir que no hay nada, se revisa si ya hay un match aceptado
+                // Before saying there is nothing, check if there is already an accepted match
                 val ongoing = PairingRepository.ongoingFor(memberId)
                 val peer = ongoing?.peerOf(memberId)
                 if (ongoing != null && peer != null) {
@@ -89,7 +89,7 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
                 return@LaunchedEffect
             }
 
-            // Los candidatos llegan ordenados por puntaje: se propone el mejor
+            // Candidates arrive sorted by score: the best one is proposed
             StackNavigator.swap(
                 Destination.PairingCandidate(
                     memberId = memberId,
@@ -113,7 +113,7 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
             .navigationBarsPadding()
             .padding(32.dp)
     ) {
-        // La columna se ajusta al ancho de su hijo más ancho, como en Flutter
+        // The column adjusts to the width of its widest child, like in Flutter
         Column(
             modifier = Modifier.fillMaxHeight(),
             verticalArrangement = Arrangement.Center,
@@ -163,7 +163,7 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
             onDismissRequest = { outcome = null },
             confirmButton = {
                 TextButton(onClick = {
-                    // Cierra el diálogo y luego esta pantalla
+                    // Closes the dialog and then this screen
                     outcome = null
                     StackNavigator.back()
                 }) { Text("OK") }

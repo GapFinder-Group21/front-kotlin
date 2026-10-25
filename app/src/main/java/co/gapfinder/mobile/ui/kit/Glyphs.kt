@@ -55,8 +55,8 @@ import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Íconos usados en la app, con el mismo nombre que tenían en Flutter (Icons.xxx),
- * para que cada pantalla use exactamente el mismo glifo.
+ * Icons used in the app, with the same names they had in Flutter (Icons.xxx),
+ * so each screen uses exactly the same glyph.
  */
 object Glyphs {
     val arrowDropDown: ImageVector = Icons.Filled.ArrowDropDown
