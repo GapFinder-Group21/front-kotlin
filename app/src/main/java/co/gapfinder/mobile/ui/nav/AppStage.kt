@@ -2,7 +2,13 @@ package co.gapfinder.mobile.ui.nav
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
@@ -26,6 +32,10 @@ import co.gapfinder.mobile.screens.pairing.PairingConfirmedPage
 import co.gapfinder.mobile.screens.pairing.PairingInvitePage
 import co.gapfinder.mobile.screens.pairing.PairingPendingPage
 import co.gapfinder.mobile.screens.pairing.PairingSearchPage
+import co.gapfinder.mobile.ui.kit.BannerMode
+import co.gapfinder.mobile.ui.kit.OfflineBanner
+import co.gapfinder.mobile.ui.kit.rememberBannerMode
+
 
 /**
  * Mantiene compuesta cada pantalla de la pila pero solo coloca (dibuja y recibe toques)
@@ -38,18 +48,29 @@ private fun Modifier.keepAlive(visible: Boolean) = layout { measurable, constrai
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppStage() {
     StackNavigator.start(Destination.Landing)
     val stack = StackNavigator.entries
+    val banner = rememberBannerMode()
 
     BackHandler(enabled = StackNavigator.canGoBack) { StackNavigator.back() }
 
     Box(Modifier.fillMaxSize()) {
-        stack.forEachIndexed { index, entry ->
-            key(entry.key) {
-                Box(Modifier.fillMaxSize().keepAlive(index == stack.lastIndex)) {
-                    Render(entry.destination)
+        Column(Modifier.fillMaxSize()) {
+            // Banner de conexión arriba de todas las pantallas
+            OfflineBanner(banner)
+
+            // Con el banner visible, él ya ocupa la barra de estado: las pantallas no la vuelven a sumar
+            val insets = if (banner != BannerMode.Hidden) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier
+            Box(Modifier.weight(1f).fillMaxWidth().then(insets)) {
+                stack.forEachIndexed { index, entry ->
+                    key(entry.key) {
+                        Box(Modifier.fillMaxSize().keepAlive(index == stack.lastIndex)) {
+                            Render(entry.destination)
+                        }
+                    }
                 }
             }
         }
