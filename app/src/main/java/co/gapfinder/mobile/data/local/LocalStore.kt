@@ -219,6 +219,7 @@ private fun Hangout.toEntity(memberId: Int, role: HangoutRole, savedAt: LocalDat
     hostAvatarUrl = host?.avatarUrl,
     spotId = spot?.id,
     spotName = spot?.name,
+    photoUrl = photoUrl,
     savedAt = savedAt,
 )
 
@@ -241,4 +242,5 @@ private fun MyHangoutEntity.toHangout() = Hangout(
     },
     host = hostId?.let { Member(id = it, name = hostName ?: "", email = "", career = "", avatarUrl = hostAvatarUrl) },
     spot = spotId?.let { CampusSpot(id = it, name = spotName ?: "") },
+    photoUrl = photoUrl,
 )

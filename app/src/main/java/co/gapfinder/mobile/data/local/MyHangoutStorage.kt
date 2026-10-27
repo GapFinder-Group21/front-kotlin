@@ -39,6 +39,7 @@ data class MyHangoutEntity(
     val spotName: String?,
     /** Solo en el mapa: si el usuario ya participa en la mesa. */
     val joined: Boolean = false,
+    val photoUrl: String? = null,
     val savedAt: LocalDateTime,
 )
 
