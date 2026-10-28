@@ -389,6 +389,8 @@ data class Hangout(
     // Solo llegan con OpenTableCompleteDTO
     val host: Member? = null,
     val spot: CampusSpot? = null,
+    /** URL relativa de la foto (/uploads/open-tables/...); null en mesas sin foto. */
+    val photoUrl: String? = null,
 ) {
     /** createdAt no se manda: en el backend la columna no es actualizable. */
     fun encode(): JSONObject = jsonOf(
@@ -416,6 +418,7 @@ data class Hangout(
             pastime = j.nodeOrNull("activity")?.let(Pastime::decode),
             host = j.nodeOrNull("creator")?.let(Member::decode),
             spot = j.nodeOrNull("building")?.let(CampusSpot::decode),
+            photoUrl = j.textOrNull("photoUrl"),
         )
     }
 }

@@ -201,6 +201,8 @@ fun HangoutDetailPage(hangoutId: Int) {
                         OfflineNote("No connection · ${lastUpdatedText(moment)}")
                         Spacer(Modifier.height(20.dp))
                     }
+                    HangoutPhoto(table)
+                    if (table.photoUrl != null) Spacer(Modifier.height(20.dp))
                     HostCard(table)
 
                     Spacer(Modifier.height(28.dp))
