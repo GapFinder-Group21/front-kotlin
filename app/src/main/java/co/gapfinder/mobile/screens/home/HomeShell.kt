@@ -59,7 +59,7 @@ fun HomeShell() {
 
     // Al entrar al home se lanzan en paralelo horario, gaps, notificaciones y recomendaciones.
     // Va en remember (antes de componer las pestañas) para que su primera carga ya las encuentre en vuelo.
-    remember { SessionVault.memberId()?.let { HomeWarmup.start(scope, it) } }
+    remember { SessionVault.memberIdNow()?.let { HomeWarmup.start(scope, it) } }
     DisposableEffect(Unit) { onDispose { HomeWarmup.clear() } }
 
     // Revisa las notificaciones y abre la invitación si llegó una solicitud de match nueva
