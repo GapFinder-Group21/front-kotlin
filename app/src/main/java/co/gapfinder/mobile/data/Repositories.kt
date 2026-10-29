@@ -1,6 +1,7 @@
 package co.gapfinder.mobile.data
 
 import android.util.Log
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.Alert
 import co.gapfinder.mobile.domain.Bond
 import co.gapfinder.mobile.domain.BondState
@@ -34,7 +35,12 @@ import co.gapfinder.mobile.foundation.expect
 import co.gapfinder.mobile.foundation.isBlankPayload
 import co.gapfinder.mobile.foundation.jsonOf
 import co.gapfinder.mobile.foundation.mapNodes
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.File
 import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -116,10 +122,11 @@ object AccountRepository {
         return persist(LoginTicket.decode(reply.json))
     }
 
-    /** POST /auth/logout y limpia la sesión local. */
+    /** POST /auth/logout y limpia la sesión y los datos guardados en el teléfono. */
     suspend fun signOut() {
         HttpGateway.send("/auth/logout")
         SessionVault.wipe()
+        LocalStore.wipe()
     }
 
     private suspend fun persist(ticket: LoginTicket): LoginTicket {
@@ -513,14 +520,25 @@ object HangoutRepository {
             .expectOrExplain(200, "Error counting open tables").text.trim().toInt()
 
     /**
-     * POST /open-tables — el backend exige creador, edificio, título, inicio antes del fin,
-     * cupo mayor a 0 y estado.
+     * POST /open-tables (multipart) — el backend exige creador, edificio, título, inicio antes del fin,
+     * cupo mayor a 0, estado y una foto JPG o PNG. Los datos van en la parte "openTable" como JSON
+     * y la foto en la parte "photo".
      */
-    suspend fun host(hostId: Int, spotId: Int, draft: Hangout): Hangout =
-        Hangout.decode(
-            HttpGateway.send("/open-tables", draft.withRelations(hostId, spotId))
+    suspend fun host(hostId: Int, spotId: Int, draft: Hangout, photo: File): Hangout {
+        val form = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                "openTable",
+                null,
+                draft.withRelations(hostId, spotId).toString().toRequestBody("application/json".toMediaType()),
+            )
+            .addFormDataPart("photo", photo.name, photo.asRequestBody("image/jpeg".toMediaType()))
+            .build()
+        return Hangout.decode(
+            HttpGateway.sendForm("/open-tables", form)
                 .expectOrExplain(201, "Error creating open table").json
         )
+    }
 
     suspend fun edit(id: Int, hostId: Int, spotId: Int, hangout: Hangout): Hangout =
         Hangout.decode(
