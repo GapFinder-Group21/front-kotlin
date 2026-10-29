@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.LectureRepository
 import co.gapfinder.mobile.data.WindowRepository
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Lecture
 import co.gapfinder.mobile.domain.Weekday
@@ -72,20 +73,21 @@ fun TimetableTab(isActive: Boolean) {
     var outcome by remember { mutableStateOf<Fetch<Timetable>>(Fetch.Waiting) }
 
     LaunchedEffect(cycle) {
-        outcome = Fetch.Waiting
+        // Primero lo guardado en Room, para no dejar la pestaña vacía mientras responde la red
+        val saved = savedTimetable()
+        outcome = if (saved != null) Fetch.Done(saved) else Fetch.Waiting
         outcome = try {
             Fetch.Done(fetchTimetable())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Fetch.Broken(e)
+            // Si la red falla se queda lo guardado; el error solo se muestra si no hay nada
+            if (saved != null) Fetch.Done(saved) else Fetch.Broken(e)
         }
     }
 
-    OnTabWake(isActive) {
-        outcome = Fetch.Waiting
-        cycle++
-    }
+    // Al volver a la pestaña se recarga sin borrar lo que ya se ve
+    OnTabWake(isActive) { cycle++ }
 
     Column(
         Modifier
@@ -149,11 +151,19 @@ private suspend fun fetchTimetable(): Timetable {
     } catch (e: Exception) {
         Log.d(LOG_TAG, "Advertencia: No se pudieron sincronizar los GAPs con el servidor: $e")
     }
-    return coroutineScope {
+    val fresh = coroutineScope {
         val lectures = async { LectureRepository.timetableOf(me) }
         val windows = async { WindowRepository.weekOf(me) }
         Timetable(lectures.await(), windows.await())
     }
+    LocalStore.saveTimetable(me, fresh.lectures, fresh.windows)
+    return fresh
+}
+
+/** Horario guardado en Room (null si no hay sesión o nunca se guardó). */
+private suspend fun savedTimetable(): Timetable? {
+    val me = SessionVault.memberId() ?: return null
+    return LocalStore.timetableOf(me)?.let { Timetable(it.lectures, it.windows) }
 }
 
 /** Clases de hoy y GAPs de hoy en una sola lista ordenada por hora de inicio. */

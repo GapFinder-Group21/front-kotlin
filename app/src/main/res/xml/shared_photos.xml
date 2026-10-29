@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carpeta que el FileProvider comparte con la app de cámara para las fotos de open tables -->
+<paths>
+    <files-path name="hangout_photos" path="hangout_photos/" />
+</paths>

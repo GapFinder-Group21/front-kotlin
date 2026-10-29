@@ -31,8 +31,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.CalendarBridge
+import co.gapfinder.mobile.foundation.Connectivity
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
@@ -43,8 +46,8 @@ import kotlinx.coroutines.launch
 
 private const val IMPORT_TAG = "CalendarImport"
 
-/** Etapas de la importación. */
-private enum class ImportStage { Linking, Done, Failed }
+/** Etapas de la importación. Offline: esperando la red para empezar. */
+private enum class ImportStage { Linking, Done, Failed, Offline }
 
 /** Texto de error al estilo de Dart (`Exception: ...`). */
 private fun Throwable.importDartText(): String = "Exception: ${message ?: ""}"
@@ -55,8 +58,14 @@ fun CalendarImportPage() {
     val scope = rememberCoroutineScope()
     var stage by remember { mutableStateOf(ImportStage.Linking) }
     var failure by remember { mutableStateOf<String?>(null) }
+    val online by rememberOnline()
 
     suspend fun runImport() {
+        // La importación lee el calendario en Google a través del backend: sin red no se intenta
+        if (!Connectivity.isOnline()) {
+            stage = ImportStage.Offline
+            return
+        }
         stage = ImportStage.Linking
         failure = null
         try {
@@ -79,6 +88,10 @@ fun CalendarImportPage() {
     }
 
     LaunchedEffect(Unit) { runImport() }
+    // Si estaba esperando la red, importa apenas vuelve
+    LaunchedEffect(online) {
+        if (online && stage == ImportStage.Offline) runImport()
+    }
 
     Column(
         Modifier
@@ -117,6 +130,16 @@ fun CalendarImportPage() {
                     StageNote("Your Google Calendar events have been imported successfully.", alpha = 0.55f)
                 }
 
+                ImportStage.Offline -> {
+                    StageBadge(Palette.Ink.fade(0.3f), Glyphs.cloudOff)
+                    Spacer(Modifier.height(28.dp))
+                    StageTitle("Waiting for connection")
+                    Spacer(Modifier.height(10.dp))
+                    StageNote("Your calendar is read from Google, so the import needs internet.", alpha = 0.55f)
+                    Spacer(Modifier.height(16.dp))
+                    OfflineNote("The import starts by itself when you're back online.")
+                }
+
                 ImportStage.Failed -> {
                     StageBadge(Palette.Coral, Glyphs.closeRounded)
                     Spacer(Modifier.height(28.dp))
@@ -138,7 +161,7 @@ fun CalendarImportPage() {
                 PillButton(
                     label = "Try Again",
                     color = Palette.Coral,
-                    onClick = { scope.launch { runImport() } },
+                    onClick = if (online) ({ scope.launch { runImport() } }) else null,
                 )
             }
         }

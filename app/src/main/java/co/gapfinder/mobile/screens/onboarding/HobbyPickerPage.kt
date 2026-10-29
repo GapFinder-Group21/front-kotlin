@@ -36,8 +36,13 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.HobbyRepository
 import co.gapfinder.mobile.data.MemberRepository
 import co.gapfinder.mobile.domain.Hobby
+import co.gapfinder.mobile.data.local.LocalStore
+import co.gapfinder.mobile.data.outbox.Outbox
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.plainTap
 import co.gapfinder.mobile.ui.nav.Destination
@@ -46,7 +51,9 @@ import co.gapfinder.mobile.ui.nav.Toaster
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 /** Estado de la carga del catálogo de intereses. */
 private sealed interface CatalogLoad {
@@ -65,12 +72,28 @@ fun HobbyPickerPage() {
     var catalog by remember { mutableStateOf<CatalogLoad>(CatalogLoad.Pending) }
     var picked by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var storing by remember { mutableStateOf(false) }
+    val online by rememberOnline()
 
-    LaunchedEffect(Unit) {
-        catalog = try {
-            CatalogLoad.Ready(HobbyRepository.all())
+    // Primero el catálogo guardado en Room y después el del backend, que también se guarda.
+    // Se repite cuando vuelve la red, así que si no había nada guardado carga solo.
+    LaunchedEffect(online) {
+        if (catalog !is CatalogLoad.Ready) {
+            LocalStore.hobbies()?.let { catalog = CatalogLoad.Ready(it.items) }
+        }
+        if (!online) {
+            if (catalog !is CatalogLoad.Ready) {
+                catalog = CatalogLoad.Failed("No connection. The interests load when you're back online.")
+            }
+            return@LaunchedEffect
+        }
+        try {
+            val fresh = HobbyRepository.all()
+            LocalStore.saveHobbies(fresh)
+            catalog = CatalogLoad.Ready(fresh)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            CatalogLoad.Failed(e.asDartText())
+            if (catalog !is CatalogLoad.Ready) catalog = CatalogLoad.Failed(e.asDartText())
         }
     }
 
@@ -85,13 +108,25 @@ fun HobbyPickerPage() {
         }
         storing = true
         scope.launch {
+            // Intereses que todavía no llegaron al backend
+            val pending = picked.toMutableList()
             try {
                 val me = SessionVault.memberId() ?: throw Exception("User session not found")
-                // Se guarda cada interés uno por uno
-                for (hobbyId in picked) {
-                    MemberRepository.attachHobby(me, hobbyId)
+                try {
+                    // Se guarda cada interés uno por uno; sin red ni se intenta
+                    if (!Connectivity.isOnline()) throw IOException("offline")
+                    while (pending.isNotEmpty()) {
+                        MemberRepository.attachHobby(me, pending.first())
+                        pending.removeAt(0)
+                    }
+                } catch (e: IOException) {
+                    // Sin red: los que faltan quedan en la cola y se mandan cuando vuelva la conexión
+                    pending.forEach { Outbox.enqueueRequest("POST", MemberRepository.hobbyPath(me, it)) }
+                    Toaster.show("Saved. Your interests will sync when you're back online.")
                 }
                 StackNavigator.swap(Destination.TimetableSetup)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toaster.show("Error saving interests: ${e.asDartText()}")
             } finally {
@@ -106,6 +141,13 @@ fun HobbyPickerPage() {
             .background(Palette.Fog)
     ) {
         InkHeader(title = "GAP FINDER", subtitle = "Profile Setup")
+
+        if (!online) {
+            OfflineNote(
+                "No connection. Your interests are saved on the phone and sync when you're back online.",
+                Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
+            )
+        }
 
         Box(
             Modifier

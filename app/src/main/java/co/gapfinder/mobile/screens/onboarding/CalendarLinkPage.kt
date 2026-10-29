@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.CalendarBridge
 import co.gapfinder.mobile.foundation.LinkOpener
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Destination
@@ -55,6 +57,7 @@ fun CalendarLinkPage() {
     var waiting by remember { mutableStateOf(false) }
     var browserShown by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    val online by rememberOnline()
 
     fun launchGoogleSignIn() {
         waiting = true
@@ -126,6 +129,11 @@ fun CalendarLinkPage() {
                     style = Typo.paragraph(FontWeight.Normal).copy(fontSize = 13.sp, color = Palette.Coral),
                 )
             }
+            if (!online) {
+                Spacer(Modifier.height(16.dp))
+                // El OAuth pasa por los servidores de Google y el backend: sin red no hay forma de hacerlo
+                OfflineNote("No connection. Google sign-in happens on Google's servers, so it needs internet. The button turns on when you're back online.")
+            }
             Spacer(Modifier.height(40.dp))
 
             when {
@@ -133,16 +141,16 @@ fun CalendarLinkPage() {
                 !browserShown -> PillButton(
                     label = "Continue with Google",
                     color = Palette.Sky,
-                    onClick = { launchGoogleSignIn() },
+                    onClick = if (online) ({ launchGoogleSignIn() }) else null,
                 )
                 else -> {
                     PillButton(
                         label = "Continue",
                         color = Palette.Sky,
-                        onClick = { StackNavigator.swap(Destination.CalendarImport) },
+                        onClick = if (online) ({ StackNavigator.swap(Destination.CalendarImport) }) else null,
                     )
                     Spacer(Modifier.height(12.dp))
-                    RetryLink(onTap = { launchGoogleSignIn() })
+                    RetryLink(onTap = { if (online) launchGoogleSignIn() })
                 }
             }
         }

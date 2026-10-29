@@ -26,6 +26,8 @@ import co.gapfinder.mobile.data.GeoProbe
 import co.gapfinder.mobile.data.NearbyRepository
 import co.gapfinder.mobile.data.SpotRepository
 import co.gapfinder.mobile.domain.Member
+import co.gapfinder.mobile.foundation.Connectivity
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
@@ -52,11 +54,21 @@ fun SpotStatusLine(memberId: Int) {
     var refreshing by remember { mutableStateOf(false) }
     var gpsOk by remember { mutableStateOf(true) }
     var resolved by remember { mutableStateOf(false) }
+    val online by rememberOnline()
+    // true si algún refresco se saltó por falta de red: al volver la red se hace uno enseguida
+    var paused by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<NearbyNotice?>(null) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
 
     suspend fun refresh() {
+        // Sin red se pausa la detección: no se manda la ubicación ni se buscan amigos
+        if (!Connectivity.isOnline()) {
+            paused = true
+            refreshing = false
+            return
+        }
+        paused = false
         refreshing = true
         if (!GeoProbe.isReady()) {
             gpsOk = false; resolved = false; spotName = null; firstLoad = false; refreshing = false
@@ -71,8 +83,9 @@ fun SpotStatusLine(memberId: Int) {
             val nowIn = SpotRepository.locate(fix.latitude, fix.longitude)?.name
             Log.d(TAG, "Located building: ${nowIn ?: "Outside campus"} (${friends.size} friends nearby)")
 
-            // Solo avisa al cambiar de edificio, no en cada refresco
-            if (nowIn != lastSpotName && nowIn != null && friends.isNotEmpty()) {
+            // Solo avisa al cambiar de edificio, no en cada refresco, y no si la red se cayó
+            // mientras llegaba la respuesta (sería un aviso viejo)
+            if (nowIn != lastSpotName && nowIn != null && friends.isNotEmpty() && Connectivity.isOnline()) {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 notice = NearbyNotice(nowIn, friends)
             }
@@ -97,11 +110,21 @@ fun SpotStatusLine(memberId: Int) {
     LaunchedEffect(Unit) {
         GeoProbe.gpsChanges().collect { scope.launch { refresh() } }
     }
+    // Al perder la red se descarta el aviso pendiente; al volver se reanuda la detección enseguida
+    // (solo si se saltó algún refresco, para no mandar dos ubicaciones seguidas al abrir la pantalla)
+    LaunchedEffect(online) {
+        if (!online) notice = null else if (paused) refresh()
+    }
 
     var text: String
     var icon = Glyphs.locationOnRounded
     var tint: Color = Palette.White.fade(0.5f)
     when {
+        // Sin red no se muestra el último edificio: podría ya no ser cierto
+        !online -> {
+            text = "Offline · building detection paused"
+            icon = Glyphs.cloudOff
+        }
         firstLoad -> text = "Locating..."
         !gpsOk -> {
             text = "Location disabled"

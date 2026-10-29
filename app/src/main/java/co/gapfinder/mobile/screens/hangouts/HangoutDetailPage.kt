@@ -49,14 +49,20 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.HangoutRepository
+import co.gapfinder.mobile.data.local.LocalStore
+import co.gapfinder.mobile.data.outbox.HangoutCouriers
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutAttendee
 import co.gapfinder.mobile.domain.HangoutState
+import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.kit.Portrait
+import co.gapfinder.mobile.ui.kit.lastUpdatedText
 import co.gapfinder.mobile.ui.nav.Toaster
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
@@ -65,11 +71,19 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.time.LocalDateTime
 
 /** Estado de la carga (equivalente al FutureBuilder). */
 private sealed interface DetailPhase {
     data object Waiting : DetailPhase
-    data class Loaded(val hangout: Hangout, val attendees: List<HangoutAttendee>) : DetailPhase
+    /** savedAt != null: es la copia guardada en Room (sin participantes) porque no hay red. */
+    data class Loaded(
+        val hangout: Hangout,
+        val attendees: List<HangoutAttendee>,
+        val savedAt: LocalDateTime? = null,
+        val joinedSaved: Boolean = false,
+    ) : DetailPhase
     data class Broken(val reason: Throwable) : DetailPhase
 }
 
@@ -80,13 +94,24 @@ fun HangoutDetailPage(hangoutId: Int) {
     var reloadTick by remember { mutableIntStateOf(0) }
     var viewerId by remember { mutableStateOf<Int?>(null) }
     var joining by remember { mutableStateOf(false) }
+    // true si el usuario pidió unirse sin red: la solicitud está en la cola
+    var joinQueued by remember { mutableStateOf(false) }
+    val online by rememberOnline()
     val scope = rememberCoroutineScope()
 
-    // Cada cambio de reloadTick equivale a asignar un Future nuevo
-    LaunchedEffect(reloadTick) {
+    // Copia guardada en Room (del mapa o de mis mesas), o null si no hay
+    suspend fun savedPhase(): DetailPhase.Loaded? {
+        val me = viewerId ?: return null
+        val saved = LocalStore.hangoutById(me, hangoutId) ?: return null
+        return DetailPhase.Loaded(saved.hangout, emptyList(), savedAt = saved.savedAt, joinedSaved = saved.joined)
+    }
+
+    // Cada cambio de reloadTick (o de la red) equivale a asignar un Future nuevo
+    LaunchedEffect(reloadTick, online) {
         phase = DetailPhase.Waiting
+        viewerId = SessionVault.memberId()
         phase = try {
-            viewerId = SessionVault.memberId()
+            if (!Connectivity.isOnline()) throw IOException("No connection. This table shows up when you're back online.")
             // La mesa y sus participantes se piden en paralelo
             coroutineScope {
                 val table = async { HangoutRepository.byId(hangoutId) }
@@ -95,6 +120,9 @@ fun HangoutDetailPage(hangoutId: Int) {
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: IOException) {
+            // Sin red: la versión guardada, si la hay
+            savedPhase() ?: DetailPhase.Broken(e)
         } catch (e: Exception) {
             DetailPhase.Broken(e)
         }
@@ -103,12 +131,24 @@ fun HangoutDetailPage(hangoutId: Int) {
     fun enroll() {
         val me = viewerId ?: return
         scope.launch {
+            // Sin red ni se intenta: la solicitud va directo a la cola
+            if (!Connectivity.isOnline()) {
+                HangoutCouriers.enqueueJoin(hangoutId, me)
+                joinQueued = true
+                Toaster.show("No connection: you'll join the table when you're back online")
+                return@launch
+            }
             joining = true
             try {
                 AttendeeRepository.join(hangoutId, me)
                 Toaster.show("Successfully joined the table!", background = Palette.Teal)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: IOException) {
+                // Sin red: la solicitud queda en la cola y se manda cuando vuelva la conexión
+                HangoutCouriers.enqueueJoin(hangoutId, me)
+                joinQueued = true
+                Toaster.show("No connection: you'll join the table when you're back online")
             } catch (e: Exception) {
                 // El backend explica el motivo (mesa llena, ya estaba dentro, etc.)
                 Toaster.show(e.plainText())
@@ -142,9 +182,11 @@ fun HangoutDetailPage(hangoutId: Int) {
             val table = current.hangout
             val attendees = current.attendees
             val isHost = table.host?.id == viewerId
-            val enrolled = attendees.any { it.member?.id == viewerId }
+            val cached = current.savedAt != null
+            val enrolled = current.joinedSaved || attendees.any { it.member?.id == viewerId }
             // Sin cupo: el backend ya la marcó como no abierta o se alcanzó el máximo
-            val isFull = table.state != HangoutState.Open || attendees.size >= table.maxParticipants
+            // (en la copia guardada no hay participantes, así que solo cuenta el estado)
+            val isFull = table.state != HangoutState.Open || (!cached && attendees.size >= table.maxParticipants)
 
             Column(Modifier.fillMaxSize().background(Palette.Fog)) {
                 InkHeader(title = "Open Table Detail", showBack = true)
@@ -155,6 +197,10 @@ fun HangoutDetailPage(hangoutId: Int) {
                         .verticalScroll(rememberScrollState())
                         .padding(24.dp)
                 ) {
+                    current.savedAt?.let { moment ->
+                        OfflineNote("No connection · ${lastUpdatedText(moment)}")
+                        Spacer(Modifier.height(20.dp))
+                    }
                     HostCard(table)
 
                     Spacer(Modifier.height(28.dp))
@@ -193,9 +239,18 @@ fun HangoutDetailPage(hangoutId: Int) {
                     }
 
                     Spacer(Modifier.height(32.dp))
-                    SectionCaption("PARTICIPANTS (${attendees.size}/${table.maxParticipants})")
-                    Spacer(Modifier.height(12.dp))
-                    AttendeeStrip(attendees)
+                    if (cached) {
+                        SectionCaption("PARTICIPANTS (MAX ${table.maxParticipants})")
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "Participants show up when you're back online.",
+                            style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.4f)),
+                        )
+                    } else {
+                        SectionCaption("PARTICIPANTS (${attendees.size}/${table.maxParticipants})")
+                        Spacer(Modifier.height(12.dp))
+                        AttendeeStrip(attendees)
+                    }
                 }
 
                 // Zona del botón de acción
@@ -205,6 +260,11 @@ fun HangoutDetailPage(hangoutId: Int) {
                 ) {
                     when {
                         joining -> CircularProgressIndicator(Modifier.size(36.dp))
+                        joinQueued -> PillButton(
+                            label = "Join pending · sent when you're online",
+                            onClick = null,
+                            color = LightGrey,
+                        )
                         isHost || enrolled -> PillButton(
                             label = if (isHost) "You created this table" else "Already a member",
                             onClick = null,

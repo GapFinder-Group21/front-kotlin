@@ -20,7 +20,7 @@ App Android nativa de GAP FINDER. Tiene la misma interfaz y los mismos flujos qu
 co.gapfinder.mobile
 ├── foundation/   red (HttpGateway), sesión cifrada (SessionVault), JSON y fechas
 ├── domain/       modelos (Member, FreeWindow, Pairing, Hangout, ...) y enums
-├── data/         repositorios REST y GeoProbe (GPS / permisos)
+├── data/         repositorios REST, GeoProbe (GPS / permisos), local/ (Room) y outbox/ (cola sin red)
 ├── ui/theme/     Palette y Typo
 ├── ui/kit/       componentes reutilizables (PillButton, FormField, DockBar, ...)
 ├── ui/nav/       Destination, StackNavigator, AppStage, Toaster
@@ -28,6 +28,25 @@ co.gapfinder.mobile
 ```
 
 La navegación usa una pila propia (`StackNavigator`). Las pantallas de abajo en la pila siguen vivas, así que conservan su estado y sus timers mientras estás en otra pantalla.
+
+## Datos sin red
+
+- **Room** (`data/local/`): horario, mis open tables y el borrador del wizard. Las pantallas leen primero de Room y después actualizan desde la red. Se accede por `LocalStore`.
+- **Cola de acciones** (`data/outbox/`): lo que se hace sin red se guarda en la tabla `pending_actions` y un worker de WorkManager lo manda cuando vuelve la conexión.
+
+Para encolar una acción propia:
+
+```kotlin
+// Una petición HTTP con el token del usuario
+Outbox.enqueueRequest("POST", "/ruta", jsonOf("campo" to valor))
+
+// Un tipo con lógica propia: se registra una vez al iniciar la app...
+Outbox.register("mi.tipo") { payload -> HttpGateway.send("/ruta", payload).toDelivery() }
+// ...y se encola donde haga falta
+Outbox.enqueue("mi.tipo", payload)
+```
+
+Si el backend responde 2xx la acción se borra. Si responde 401/403/408/429/5xx o no hay red, se reintenta con backoff. Cualquier otro 4xx la descarta.
 
 ## Pantallas
 

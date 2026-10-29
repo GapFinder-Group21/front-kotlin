@@ -6,6 +6,7 @@ import co.gapfinder.mobile.ui.nav.StackNavigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -43,6 +44,10 @@ object HttpGateway {
 
     suspend fun tweak(path: String, body: Any? = null): Reply =
         withToken { Request.Builder().url(url(path)).patch(payload(body)) }
+
+    /** POST multipart/form-data (por ejemplo, una open table con su foto). */
+    suspend fun sendForm(path: String, form: MultipartBody): Reply =
+        withToken { Request.Builder().url(url(path)).post(form) }
 
     suspend fun erase(path: String): Reply = withToken { Request.Builder().url(url(path)).delete() }
 

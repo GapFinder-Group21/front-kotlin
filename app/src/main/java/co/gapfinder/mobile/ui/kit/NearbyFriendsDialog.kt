@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import co.gapfinder.mobile.domain.Member
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
@@ -33,6 +36,11 @@ import co.gapfinder.mobile.ui.theme.fade
 /** Aviso "Friends Nearby!" con los amigos que están en el edificio al que se acaba de entrar. */
 @Composable
 fun NearbyFriendsDialog(spotName: String, friends: List<Member>, onDismiss: () -> Unit) {
+    // Sin red ya no se sabe si los amigos siguen ahí: el aviso se cierra para no mostrar algo viejo
+    val online by rememberOnline()
+    LaunchedEffect(online) {
+        if (!online) onDismiss()
+    }
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
