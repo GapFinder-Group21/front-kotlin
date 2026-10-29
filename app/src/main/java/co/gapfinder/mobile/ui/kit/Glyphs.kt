@@ -27,6 +27,8 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Clear
@@ -104,4 +106,6 @@ object Glyphs {
     val addRounded: ImageVector = Icons.Rounded.Add
     val removeCircleOutline: ImageVector = Icons.Filled.RemoveCircleOutline
     val addCircleOutline: ImageVector = Icons.Filled.AddCircleOutline
+    val photoCameraRounded: ImageVector = Icons.Rounded.PhotoCamera
+    val photoLibraryRounded: ImageVector = Icons.Rounded.PhotoLibrary
 }

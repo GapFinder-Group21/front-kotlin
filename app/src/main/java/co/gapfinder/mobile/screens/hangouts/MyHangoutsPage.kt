@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.HangoutRepository
+import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.kit.Glyphs
@@ -75,23 +76,36 @@ fun MyHangoutsPage() {
     val scope = rememberCoroutineScope()
 
     suspend fun pullEverything() {
-        pending = true
         fault = null
+        val me = SessionVault.memberId() ?: return
+
+        // Primero lo guardado en Room; el spinner solo sale si todavía no hay nada guardado
+        val saved = LocalStore.myHangoutsOf(me)
+        if (saved != null) {
+            hosted = saved.hosted
+            attended = saved.attended
+            pending = false
+        } else {
+            pending = true
+        }
+
         try {
-            val me = SessionVault.memberId() ?: return
             val everything = HangoutRepository.all()
             val (mine, others) = everything.partition { it.host?.id == me }
 
             // De las ajenas quedan solo aquellas en las que el usuario figura como participante
             val checks = coroutineScope { others.map { table -> async { attends(table.id, me) } }.awaitAll() }
+            val joined = others.filterIndexed { index, _ -> checks[index] }
+            LocalStore.saveMyHangouts(me, mine, joined)
             hosted = mine
-            attended = others.filterIndexed { index, _ -> checks[index] }
+            attended = joined
             pending = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.d(TAG, "Error loading my Open Tables: $e")
-            fault = e.asDartString()
+            // Con algo guardado se sigue mostrando eso; el error solo se ve si no hay nada
+            if (saved == null) fault = e.asDartString()
             pending = false
         }
     }
