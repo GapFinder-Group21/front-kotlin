@@ -2,6 +2,7 @@ package co.gapfinder.mobile.data
 
 import android.util.Log
 import co.gapfinder.mobile.data.local.LocalStore
+import co.gapfinder.mobile.foundation.TtlCache
 import co.gapfinder.mobile.domain.Alert
 import co.gapfinder.mobile.domain.Bond
 import co.gapfinder.mobile.domain.BondState
@@ -130,6 +131,7 @@ object AccountRepository {
         HttpGateway.send("/auth/logout")
         SessionVault.wipe()
         LocalStore.wipe()
+        Caches.clear()
     }
 
     private suspend fun persist(ticket: LoginTicket): LoginTicket {
@@ -179,9 +181,33 @@ object MemberRepository {
 
 // ============================================================ Intereses
 
+/**
+ * Caché en memoria de lo compartido y temporal. Los repositorios consultan primero aquí y después la red.
+ * Lo del usuario (horario, gaps, mis Open Tables) no entra: eso va en Room.
+ */
+object Caches {
+    private const val DAY = 24L * 60 * 60 * 1000
+    private const val RECOMMENDATIONS_TTL = 5L * 60 * 1000
+    const val ALL = "all"
+
+    // Los edificios casi no cambian
+    val spots = TtlCache<String, List<CampusSpot>>(maxEntries = 1, ttlMillis = DAY)
+    val hobbies = TtlCache<String, List<Hobby>>(maxEntries = 1, ttlMillis = DAY)
+    // Una entrada por usuario
+    val recommendations = TtlCache<Int, Recommendation>(maxEntries = 4, ttlMillis = RECOMMENDATIONS_TTL)
+
+    fun clear() {
+        spots.clear()
+        hobbies.clear()
+        recommendations.clear()
+    }
+}
+
 object HobbyRepository {
-    suspend fun all(): List<Hobby> =
+    /** Primero el caché (vigente 24 h); si no hay, GET /interests. */
+    suspend fun all(): List<Hobby> = Caches.hobbies.getOrLoad(Caches.ALL) {
         HttpGateway.fetch("/interests").expectOrExplain(200, "Error getting interests").many(Hobby::decode)
+    }
 
     suspend fun byId(id: Int): Hobby =
         Hobby.decode(HttpGateway.fetch("/interests/$id").expectOrExplain(200, "Error getting interest").json)
@@ -189,12 +215,15 @@ object HobbyRepository {
     /** El nombre es obligatorio y único. */
     suspend fun add(hobby: Hobby): Hobby =
         Hobby.decode(HttpGateway.send("/interests", hobby.encode()).expectOrExplain(201, "Error creating interest").json)
+            .also { Caches.hobbies.clear() }
 
     suspend fun edit(id: Int, hobby: Hobby): Hobby =
         Hobby.decode(HttpGateway.overwrite("/interests/$id", hobby.encode()).expectOrExplain(200, "Error updating interest").json)
+            .also { Caches.hobbies.clear() }
 
     suspend fun drop(id: Int) {
         HttpGateway.erase("/interests/$id").expectOrExplain(204, "Error deleting interest")
+        Caches.hobbies.clear()
     }
 }
 
@@ -225,8 +254,10 @@ object PastimeRepository {
 // ============================================================ Edificios
 
 object SpotRepository {
-    suspend fun all(): List<CampusSpot> =
+    /** Primero el caché (vigente 24 h); si no hay, GET /buildings. */
+    suspend fun all(): List<CampusSpot> = Caches.spots.getOrLoad(Caches.ALL) {
         HttpGateway.fetch("/buildings").expectOrExplain(200, "Error getting buildings").many(CampusSpot::decode)
+    }
 
     suspend fun byId(id: Int): CampusSpot =
         CampusSpot.decode(HttpGateway.fetch("/buildings/$id").expectOrExplain(200, "Error getting building").json)
@@ -240,12 +271,15 @@ object SpotRepository {
 
     suspend fun add(spot: CampusSpot): CampusSpot =
         CampusSpot.decode(HttpGateway.send("/buildings", spot.encode()).expectOrExplain(201, "Error creating building").json)
+            .also { Caches.spots.clear() }
 
     suspend fun edit(id: Int, spot: CampusSpot): CampusSpot =
         CampusSpot.decode(HttpGateway.overwrite("/buildings/$id", spot.encode()).expectOrExplain(200, "Error updating building").json)
+            .also { Caches.spots.clear() }
 
     suspend fun drop(id: Int) {
         HttpGateway.erase("/buildings/$id").expectOrExplain(204, "Error deleting building")
+        Caches.spots.clear()
     }
 }
 
@@ -627,7 +661,10 @@ object DropOffRepository {
 
 object RecommendationRepository {
     /** GET /recommendations/user/{userId}/open-tables — mesas en el edificio que más frecuenta el usuario. */
-    suspend fun hangoutsFor(memberId: Int): Recommendation {
+    suspend fun hangoutsFor(memberId: Int): Recommendation =
+        Caches.recommendations.getOrLoad(memberId) { fetchFor(memberId) }
+
+    private suspend fun fetchFor(memberId: Int): Recommendation {
         val reply = HttpGateway.fetch("/recommendations/user/$memberId/open-tables")
         Log.d(TAG, "REC userId=$memberId status=${reply.code} body=${reply.text}")
         reply.expect(200, "Error getting recommendations")

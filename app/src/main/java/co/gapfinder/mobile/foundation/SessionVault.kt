@@ -54,6 +54,9 @@ object SessionVault {
 
     suspend fun memberId(): Int? = withContext(Dispatchers.IO) { prefs.getString(KEY_MEMBER, null)?.toIntOrNull() }
 
+    /** Igual que [memberId] pero sin suspender: lee el valor que SharedPreferences ya tiene en memoria. Para código de composición. */
+    fun memberIdNow(): Int? = prefs.getString(KEY_MEMBER, null)?.toIntOrNull()
+
     suspend fun isSignedIn(): Boolean = refreshToken() != null
 
     /** Borra todo (logout). */

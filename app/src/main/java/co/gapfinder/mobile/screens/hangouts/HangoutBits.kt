@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,6 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import co.gapfinder.mobile.foundation.ServerEnv
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
@@ -66,6 +71,22 @@ internal fun Hangout.isOngoing(): Boolean =
     (state == HangoutState.Open || state == HangoutState.Full) && endsAt.isAfter(LocalDateTime.now())
 
 /** Minutos que le quedan a la mesa. */
+/** Foto de la mesa. Coil la guarda en disco, así que se ve también sin red si ya se había abierto. */
+@Composable
+internal fun HangoutPhoto(table: Hangout, modifier: Modifier = Modifier) {
+    val path = table.photoUrl ?: return
+    val url = if (path.startsWith("http")) path else ServerEnv.BASE_URL + path
+    AsyncImage(
+        model = url,
+        contentDescription = "Photo of ${table.title}",
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(16.dp)),
+    )
+}
+
 internal fun Hangout.minutesLeft(): Long = Duration.between(LocalDateTime.now(), endsAt).toMinutes()
 
 /**
