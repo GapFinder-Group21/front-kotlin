@@ -101,7 +101,7 @@ object AccountRepository {
                 "phoneNumber" to phoneNumber,
             ),
         )
-        if (reply.code != 201 && reply.code != 200) throw ServerFault("Error al registrarse: ${reply.code}")
+        if (reply.code != 201 && reply.code != 200) throw ServerFault("Error signing up: ${reply.code}")
 
         // Si el registro ya trae tokens se guarda la sesión; si no, se inicia sesión
         val ticket = try {
@@ -115,14 +115,14 @@ object AccountRepository {
     /** POST /auth/login */
     suspend fun signIn(email: String, password: String): LoginTicket {
         val reply = HttpGateway.sendAnonymous("/auth/login", jsonOf("email" to email, "password" to password))
-            .expect(200, "Error al iniciar sesión")
+            .expect(200, "Error logging in")
         return persist(LoginTicket.decode(reply.json))
     }
 
     /** POST /auth/refresh */
     suspend fun renewSession(): LoginTicket {
         val reply = HttpGateway.sendAnonymous("/auth/refresh", jsonOf("refreshToken" to SessionVault.refreshToken()))
-            .expect(200, "Error al refrescar la sesión")
+            .expect(200, "Error refreshing the session")
         return persist(LoginTicket.decode(reply.json))
     }
 
@@ -355,7 +355,7 @@ class CalendarImportFault(val status: Int, val detail: String) :
 object CalendarBridge {
     /** GET /google/auth-url */
     suspend fun authorizationLink(): String =
-        HttpGateway.fetch("/google/auth-url").expect(200, "Error al obtener la URL de Google").json.getString("url")
+        HttpGateway.fetch("/google/auth-url").expect(200, "Error getting the Google sign-in link").json.getString("url")
 
     /** POST /google/import-schedule — lanza [CalendarImportFault] si el backend no responde 200. */
     suspend fun pullTimetable(): Boolean {
