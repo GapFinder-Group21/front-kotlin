@@ -15,6 +15,11 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
+
+        // Backend address: gapfinder.baseUrl in gradle.properties (the public server).
+        // For a local backend: ./gradlew installDebug -Pgapfinder.baseUrl=http://10.0.2.2:8080
+        val baseUrl = project.property("gapfinder.baseUrl") as String
+        buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
     }
 
     buildTypes {
@@ -31,6 +36,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

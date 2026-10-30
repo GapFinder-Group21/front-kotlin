@@ -1,6 +1,8 @@
 package co.gapfinder.mobile.foundation
 
-/** Dirección del backend. Cambia la IP según tu red local. */
+import co.gapfinder.mobile.BuildConfig
+
+/** Backend address. It comes from gapfinder.baseUrl in gradle.properties (the public server). */
 object ServerEnv {
-    const val BASE_URL = "http://192.168.0.37:8080"
+    const val BASE_URL = BuildConfig.BASE_URL
 }
