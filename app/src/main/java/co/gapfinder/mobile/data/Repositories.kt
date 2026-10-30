@@ -31,6 +31,7 @@ import co.gapfinder.mobile.foundation.HttpGateway
 import co.gapfinder.mobile.foundation.Reply
 import co.gapfinder.mobile.foundation.ServerFault
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.decodeOffMain
 import co.gapfinder.mobile.foundation.expect
 import co.gapfinder.mobile.foundation.isBlankPayload
 import co.gapfinder.mobile.foundation.jsonOf
@@ -45,16 +46,17 @@ import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-
+ 
 private const val TAG = "Repo"
 
 private fun encodeParam(value: String): String =
     URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
-private inline fun <T> Reply.many(mapper: (JSONObject) -> T): List<T> = jsonList.mapNodes(mapper)
+private suspend fun <T> Reply.many(mapper: (JSONObject) -> T): List<T> =
+    decodeOffMain { jsonList.mapNodes(mapper) }
 
-private inline fun <T> Reply.oneOrNull(mapper: (JSONObject) -> T): T? =
-    if (text.isBlankPayload()) null else mapper(json)
+private suspend fun <T> Reply.oneOrNull(mapper: (JSONObject) -> T): T? =
+    if (text.isBlankPayload()) null else decodeOffMain { mapper(json) }
 
 /**
  * Como [expect], pero el error lleva el mensaje del backend cuando lo manda:
