@@ -35,6 +35,7 @@ import co.gapfinder.mobile.data.CalendarImportFault
 import co.gapfinder.mobile.data.CalendarImportReport
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -51,9 +52,6 @@ private const val IMPORT_TAG = "CalendarImport"
 
 /** Etapas de la importación. Offline: esperando la red para empezar. */
 private enum class ImportStage { Linking, Done, Failed, Offline }
-
-/** Texto de error al estilo de Dart (`Exception: ...`). */
-private fun Throwable.importDartText(): String = "Exception: ${message ?: ""}"
 
 /** Importa el horario desde Google Calendar. */
 @Composable
@@ -79,10 +77,10 @@ fun CalendarImportPage() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            val text = e.importDartText()
-            Log.d(IMPORT_TAG, "⚠️ IMPORT ERROR/CONFLICT: $text")
+            val text = e.userText()
+            Log.d(IMPORT_TAG, "⚠️ IMPORT ERROR/CONFLICT: $e")
             // Un 409 significa conflicto, pero los datos ya existen
-            if ((e as? CalendarImportFault)?.status == 409 || text.contains("409")) {
+            if ((e as? CalendarImportFault)?.status == 409 || e.message?.contains("409") == true) {
                 Log.d(IMPORT_TAG, "ℹ️ IMPORT: Conflict 409 detected, but data persists. Marking as success.")
                 stage = ImportStage.Done
                 return

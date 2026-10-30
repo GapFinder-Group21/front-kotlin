@@ -50,6 +50,7 @@ import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -122,7 +123,7 @@ fun MyHangoutsPage() {
         } catch (e: Exception) {
             Log.d(TAG, "Error loading my Open Tables: $e")
             // Con algo guardado se sigue mostrando eso; el error solo se ve si no hay nada
-            if (saved == null) fault = e.asDartString()
+            if (saved == null) fault = e.userText()
             pending = false
         }
     }

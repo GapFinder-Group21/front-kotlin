@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.RecommendationRepository
 import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.Recommendation
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.Portrait
@@ -100,7 +101,7 @@ fun RecommendationsTab(isActive: Boolean) {
                 Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
 
                 is Fetch.Broken -> LoadFailure(
-                    detail = state.cause.message ?: state.cause.toString(),
+                    detail = state.cause.userText(),
                     onRetry = reload,
                     modifier = Modifier.align(Alignment.Center),
                 )

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.WindowRepository
 import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.PairingFocus
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.nav.Destination
@@ -64,7 +65,7 @@ fun WindowDetailPage(windowId: Int) {
                 Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
 
                 is Fetch.Broken -> Text(
-                    text = "Error: ${state.cause.dartStyleText()}",
+                    text = state.cause.userText(),
                     style = Typo.paragraph().copy(fontSize = 14.sp, color = InheritedInk),
                     modifier = Modifier.align(Alignment.Center),
                 )

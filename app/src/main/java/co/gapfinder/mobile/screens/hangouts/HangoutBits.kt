@@ -56,12 +56,6 @@ internal val PaleGrey = Color(0xFFE0E0E0)
 /** Fondo de Scaffold sin color explícito. */
 internal val BareScaffold = Color(0xFFFEF7FF)
 
-/** Equivale a `e.toString()` de una Exception de Dart. */
-internal fun Throwable.asDartString(): String = "Exception: ${message ?: ""}"
-
-/** Mensaje sin el prefijo "Exception: " (replaceAll). */
-internal fun Throwable.plainText(): String = message ?: toString()
-
 /** true si el usuario figura entre los participantes de la mesa. */
 internal suspend fun attends(hangoutId: Int, memberId: Int): Boolean =
     AttendeeRepository.of(hangoutId).any { it.member?.id == memberId }

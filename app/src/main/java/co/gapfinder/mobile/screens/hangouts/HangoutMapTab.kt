@@ -46,6 +46,7 @@ import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.CampusBoard
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -129,7 +130,7 @@ fun HangoutMapTab() {
             } catch (e: Exception) {
                 Log.d(TAG, "Error loading Open Tables: $e")
                 // Con algo guardado se sigue mostrando eso con su fecha; el error solo se ve si no hay nada
-                if (saved == null) notice = e.plainText()
+                if (saved == null) notice = e.userText()
             }
         } finally {
             fetching = false

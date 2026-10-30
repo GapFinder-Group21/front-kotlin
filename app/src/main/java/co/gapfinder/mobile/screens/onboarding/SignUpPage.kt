@@ -45,6 +45,7 @@ import co.gapfinder.mobile.domain.EnergyLevel
 import co.gapfinder.mobile.foundation.ACADEMIC_PROGRAMS
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.FormField
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.NightHeader
@@ -142,7 +143,7 @@ fun SignUpPage() {
                 )
                 StackNavigator.swap(Destination.LocationGate(fromOnboarding = true))
             } catch (e: Exception) {
-                Toaster.show(e.message ?: e.toString())
+                Toaster.show(e.userText())
             } finally {
                 busy = false
             }

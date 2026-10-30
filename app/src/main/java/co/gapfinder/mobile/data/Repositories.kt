@@ -350,7 +350,7 @@ object WindowRepository {
 
 /** La importación de Google respondió con un código distinto de 200. Lleva el código para clasificar el error (BQ 1). */
 class CalendarImportFault(val status: Int, val detail: String) :
-    Exception("Error al importar el horario: $status")
+    ServerFault("Couldn't import your calendar (error $status)")
 
 object CalendarBridge {
     /** GET /google/auth-url */

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.CalendarBridge
 import co.gapfinder.mobile.foundation.LinkOpener
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -45,9 +46,6 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.launch
-
-/** Texto de error al estilo de Dart (`Exception: ...`). */
-private fun Throwable.linkDartText(): String = "Exception: ${message ?: ""}"
 
 /** Abre el login de Google en el navegador y luego pasa a importar. */
 @Composable
@@ -66,11 +64,15 @@ fun CalendarLinkPage() {
             try {
                 val link = CalendarBridge.authorizationLink()
                 val ok = LinkOpener.openExternally(context, link)
-                if (!ok) throw Exception("No se pudo abrir el navegador")
+                if (!ok) {
+                    problem = "Couldn't open the browser. Please try again."
+                    waiting = false
+                    return@launch
+                }
                 browserShown = true
                 waiting = false
             } catch (e: Exception) {
-                problem = e.linkDartText()
+                problem = e.userText()
                 waiting = false
             }
         }

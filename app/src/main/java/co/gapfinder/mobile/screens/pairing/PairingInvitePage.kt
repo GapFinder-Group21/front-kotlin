@@ -35,6 +35,7 @@ import co.gapfinder.mobile.data.PairingRepository
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.Pairing
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.nav.Destination
@@ -100,7 +101,7 @@ fun PairingInvitePage(pairingId: Int) {
                 throw e
             } catch (e: Exception) {
                 answering = false
-                Toaster.show("Error accepting match: ${e.dartText()}")
+                Toaster.show("Error accepting match: ${e.userText()}")
             }
         }
     }
@@ -119,7 +120,7 @@ fun PairingInvitePage(pairingId: Int) {
                 throw e
             } catch (e: Exception) {
                 answering = false
-                Toaster.show("Error declining match: ${e.dartText()}")
+                Toaster.show("Error declining match: ${e.userText()}")
             }
         }
     }
