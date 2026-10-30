@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.GeoProbe
@@ -386,9 +387,13 @@ private fun DiscoverCard(item: Hangout, alreadyIn: Boolean, onOpen: () -> Unit) 
                         modifier = Modifier.size(12.dp),
                     )
                     Spacer(Modifier.width(4.dp))
+                    // El lugar se recorta con "…" para que el tiempo restante quepa en una sola línea
                     Text(
                         text = item.spot?.name ?: "Unknown location",
                         style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 12.sp, color = Palette.Ink.fade(0.45f)),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     Spacer(Modifier.width(8.dp))
                     PastimeTag(item.title)
@@ -401,8 +406,10 @@ private fun DiscoverCard(item: Hangout, alreadyIn: Boolean, onOpen: () -> Unit) 
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "${item.minutesLeft()}m left",
+                        text = "${item.timeLeftText()} left",
                         style = Typo.paragraph().copy(fontSize = 12.sp, color = Palette.Ink.fade(0.45f)),
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }

@@ -89,6 +89,16 @@ internal fun HangoutPhoto(table: Hangout, modifier: Modifier = Modifier) {
 
 internal fun Hangout.minutesLeft(): Long = Duration.between(LocalDateTime.now(), endsAt).toMinutes()
 
+/** Tiempo restante corto para las tarjetas: "45m", "3h 20m" o "7d". */
+internal fun Hangout.timeLeftText(): String {
+    val minutes = minutesLeft().coerceAtLeast(0)
+    return when {
+        minutes < 60 -> "${minutes}m"
+        minutes < 24 * 60 -> if (minutes % 60 == 0L) "${minutes / 60}h" else "${minutes / 60}h ${minutes % 60}m"
+        else -> "${minutes / (24 * 60)}d"
+    }
+}
+
 /**
  * Botón tipo ElevatedButton de pastilla (elevación 0, alto mínimo 40, ancho mínimo 64,
  * con 4dp arriba/abajo del área táctil de 48).
