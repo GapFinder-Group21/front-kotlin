@@ -91,39 +91,39 @@ fun SignUpPage() {
 
         // Se valida campo por campo y se avisa del primero que falle
         if (name.isEmpty()) {
-            Toaster.show("Por favor ingresa tu nombre")
+            Toaster.show("Please enter your name")
             return
         }
         if (address.isEmpty() || !address.contains("@")) {
-            Toaster.show("Por favor ingresa un correo electrónico válido")
+            Toaster.show("Please enter a valid email")
             return
         }
         if (secretWord.length < MIN_PASSWORD_LENGTH) {
-            Toaster.show("La contraseña debe tener al menos $MIN_PASSWORD_LENGTH caracteres")
+            Toaster.show("The password must have at least $MIN_PASSWORD_LENGTH characters")
             return
         }
         if (secretWord != secretRepeat) {
-            Toaster.show("Las contraseñas no coinciden")
+            Toaster.show("The passwords don't match")
             return
         }
         val semester = term.trim().toIntOrNull()
         if (semester == null || semester !in SEMESTER_RANGE) {
-            Toaster.show("El semestre debe ser un número entre ${SEMESTER_RANGE.first} y ${SEMESTER_RANGE.last}")
+            Toaster.show("The semester must be a number between ${SEMESTER_RANGE.first} and ${SEMESTER_RANGE.last}")
             return
         }
         val chosenCareer = career
         if (chosenCareer == null) {
-            Toaster.show("Por favor selecciona una carrera")
+            Toaster.show("Please select a career")
             return
         }
         if (phoneNumber.isEmpty()) {
-            Toaster.show("Por favor ingresa tu número de teléfono")
+            Toaster.show("Please enter your phone number")
             return
         }
         // Sin red no se intenta: se avisa y se espera a que vuelva
         if (!Connectivity.isOnline()) {
             waitingForNetwork = true
-            Toaster.show("Sin conexión. Tu cuenta se crea cuando vuelva el internet.")
+            Toaster.show("No connection. Your account will be created when you're back online.")
             return
         }
         waitingForNetwork = false
@@ -246,8 +246,8 @@ fun SignUpPage() {
 
             if (!online) {
                 OfflineNote(
-                    if (waitingForNetwork) "Sin conexión. Tu cuenta se crea automáticamente cuando vuelva el internet."
-                    else "Sin conexión. Crear la cuenta necesita internet."
+                    if (waitingForNetwork) "No connection. Your account will be created automatically when you're back online."
+                    else "No connection. Creating an account needs internet."
                 )
                 Spacer(Modifier.height(14.dp))
             }

@@ -117,7 +117,7 @@ fun TimetableTab(isActive: Boolean) {
 
                 is Fetch.Done -> if (state.value.lectures.isEmpty() && state.value.windows.isEmpty()) {
                     Text(
-                        text = "Aún no tienes clases importadas.",
+                        text = "You don't have any imported classes yet.",
                         style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.5f)),
                         modifier = Modifier.align(Alignment.Center),
                     )
@@ -189,7 +189,7 @@ private fun TodayAgenda(table: Timetable) {
     if (slots.isEmpty()) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Text(
-                text = "No tienes clases hoy.",
+                text = "You don't have classes today.",
                 style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.5f)),
                 modifier = Modifier.padding(top = 40.dp),
             )
