@@ -1,5 +1,7 @@
 package co.gapfinder.mobile.foundation
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -56,6 +58,13 @@ fun <T> List<T>.toJsonArray(encoder: (T) -> Any?): JSONArray =
 
 /** Cuerpo vacío o "null" que manda el backend cuando no hay resultado. */
 fun String.isBlankPayload(): Boolean = isBlank() || trim() == "null"
+
+/**
+ * Corre el parseo de JSON en [Dispatchers.Default], que es para trabajo de CPU.
+ * Queda separado de [Dispatchers.IO], que HttpGateway usa solo para esperar la red,
+ * y saca del hilo principal el armado de listas grandes (gaps, amigos, open tables).
+ */
+suspend fun <T> decodeOffMain(block: () -> T): T = withContext(Dispatchers.Default) { block() }
 
 // ---------- Fechas y horas ----------
 

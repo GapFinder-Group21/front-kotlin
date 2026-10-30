@@ -77,6 +77,9 @@ import co.gapfinder.mobile.ui.theme.fade
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
@@ -280,31 +283,41 @@ fun FriendsTab(isActive: Boolean) {
 private suspend fun collectRoster(): BuddyRoster {
     val me = SessionVault.memberId() ?: return BuddyRoster(emptyList(), emptyList(), emptyList())
 
-    val everyone = BondRepository.friendsOf(me)
-    val incoming = BondRepository.incomingFor(me)
+    return coroutineScope {
+        // Amigos y solicitudes a la vez
+        val everyoneJob = async { BondRepository.friendsOf(me) }
+        val incomingJob = async { BondRepository.incomingFor(me) }
+        val everyone = everyoneJob.await()
 
-    // La solicitud puede traer al usuario completo o solo su id; en ese caso se consulta
-    val asks = incoming.mapNotNull { bond ->
-        val sender = bond.requester ?: bond.requesterId?.let { senderId ->
-            try {
-                MemberRepository.byId(senderId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (ignored: Exception) {
-                null
+        // Los GAPs de cada amigo en paralelo (antes era una petición por amigo, una tras otra)
+        val weeksJob = everyone.map { friend -> async { WindowRepository.weekOf(friend.id) } }
+
+        // La solicitud puede traer al usuario completo o solo su id; en ese caso se consulta, también en paralelo
+        val asks = incomingJob.await().map { bond ->
+            async {
+                val sender = bond.requester ?: bond.requesterId?.let { senderId ->
+                    try {
+                        MemberRepository.byId(senderId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (ignored: Exception) {
+                        null
+                    }
+                }
+                sender?.let { BondAsk(bond.id, it) }
             }
-        }
-        sender?.let { BondAsk(bond.id, it) }
-    }
+        }.awaitAll().filterNotNull()
 
-    val now = Chrono.now()
-    val available = mutableListOf<FreeBuddy>()
-    val attending = mutableListOf<Member>()
-    for (friend in everyone) {
-        val live = WindowRepository.weekOf(friend.id).firstOrNull { it.isLiveAt(now) }
-        if (live != null) available += FreeBuddy(friend, live) else attending += friend
+        val weeks = weeksJob.awaitAll()
+        val now = Chrono.now()
+        val available = mutableListOf<FreeBuddy>()
+        val attending = mutableListOf<Member>()
+        everyone.forEachIndexed { index, friend ->
+            val live = weeks[index].firstOrNull { it.isLiveAt(now) }
+            if (live != null) available += FreeBuddy(friend, live) else attending += friend
+        }
+        BuddyRoster(available, attending, asks)
     }
-    return BuddyRoster(available, attending, asks)
 }
 
 private fun clockOf(moment: LocalDateTime): String = twelveHourClock(moment.hour, moment.minute)

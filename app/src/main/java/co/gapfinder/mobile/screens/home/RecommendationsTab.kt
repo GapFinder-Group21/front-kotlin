@@ -70,7 +70,9 @@ fun RecommendationsTab(isActive: Boolean) {
         outcome = Fetch.Waiting
         outcome = try {
             val me = SessionVault.memberId() ?: throw Exception("No user session found")
-            Fetch.Done(RecommendationRepository.hangoutsFor(me))
+            // La primera vez se usa lo que HomeWarmup ya cargó en paralelo; si falló, se intenta de nuevo
+            val warm = HomeWarmup.takeRecommendation(me)?.getOrNull()
+            Fetch.Done(warm ?: RecommendationRepository.hangoutsFor(me))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
