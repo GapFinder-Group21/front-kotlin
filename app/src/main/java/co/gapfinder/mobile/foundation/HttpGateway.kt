@@ -12,6 +12,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Respuesta cruda del servidor: código HTTP + cuerpo ya decodificado en UTF-8. */
@@ -20,7 +21,17 @@ data class Reply(val code: Int, val text: String) {
     val jsonList get() = org.json.JSONArray(text)
 }
 
-class ServerFault(message: String) : Exception(message)
+open class ServerFault(message: String) : Exception(message)
+
+/**
+ * Texto de un error para mostrarle al usuario. Los ServerFault ya traen un mensaje pensado para
+ * la pantalla; las demás excepciones (sin red, JSON inválido) traen texto técnico que no se muestra.
+ */
+fun Throwable.userText(): String = when (this) {
+    is ServerFault -> message ?: "Something went wrong. Please try again."
+    is IOException -> "Couldn't reach GapFinder. Check your connection and try again."
+    else -> "Something went wrong. Please try again."
+}
 
 /**
  * Cliente HTTP autenticado. Añade el Bearer token, refresca una vez si llega 401 o 403

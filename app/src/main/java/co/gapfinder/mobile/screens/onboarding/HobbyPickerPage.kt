@@ -41,6 +41,7 @@ import co.gapfinder.mobile.data.outbox.Outbox
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
@@ -61,9 +62,6 @@ private sealed interface CatalogLoad {
     data class Failed(val reason: String) : CatalogLoad
     data class Ready(val items: List<Hobby>) : CatalogLoad
 }
-
-/** Texto de error al estilo de Dart (`Exception: ...`). */
-private fun Throwable.asDartText(): String = "Exception: ${message ?: ""}"
 
 /** Selección de intereses durante el registro. */
 @Composable
@@ -93,7 +91,7 @@ fun HobbyPickerPage() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (catalog !is CatalogLoad.Ready) catalog = CatalogLoad.Failed(e.asDartText())
+            if (catalog !is CatalogLoad.Ready) catalog = CatalogLoad.Failed(e.userText())
         }
     }
 
@@ -128,7 +126,7 @@ fun HobbyPickerPage() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Toaster.show("Error saving interests: ${e.asDartText()}")
+                Toaster.show("Error saving interests: ${e.userText()}")
             } finally {
                 storing = false
             }

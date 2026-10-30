@@ -68,6 +68,7 @@ import co.gapfinder.mobile.domain.FreeWindow
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Toaster
@@ -181,7 +182,7 @@ fun FriendsTab(isActive: Boolean) {
                 throw e
             } catch (e: Exception) {
                 // El backend explica el motivo (ya son amigos, solicitud repetida, etc.)
-                Toaster.show(e.message ?: e.toString())
+                Toaster.show(e.userText())
             }
         }
     }
@@ -196,7 +197,7 @@ fun FriendsTab(isActive: Boolean) {
                 throw e
             } catch (e: Exception) {
                 val verb = if (accept) "accepting" else "rejecting"
-                Toaster.show("Error $verb request: ${e.dartStyleText()}")
+                Toaster.show("Error $verb request: ${e.userText()}")
             }
         }
     }

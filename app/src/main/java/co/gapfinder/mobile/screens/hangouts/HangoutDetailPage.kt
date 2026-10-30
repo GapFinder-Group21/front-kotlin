@@ -57,6 +57,7 @@ import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -151,7 +152,7 @@ fun HangoutDetailPage(hangoutId: Int) {
                 Toaster.show("No connection: you'll join the table when you're back online")
             } catch (e: Exception) {
                 // El backend explica el motivo (mesa llena, ya estaba dentro, etc.)
-                Toaster.show(e.plainText())
+                Toaster.show(e.userText())
             } finally {
                 joining = false
             }
@@ -171,7 +172,7 @@ fun HangoutDetailPage(hangoutId: Int) {
                 InkHeader(title = "Error", showBack = true)
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "Error: ${current.reason.asDartString()}",
+                        text = current.reason.userText(),
                         style = TextStyle(fontSize = 14.sp, letterSpacing = 0.25.sp, lineHeight = 1.43.em, color = SurfaceText),
                     )
                 }

@@ -77,6 +77,7 @@ import co.gapfinder.mobile.domain.Pastime
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -230,7 +231,7 @@ fun HangoutComposerPage() {
             throw e
         } catch (e: Exception) {
             Log.d(TAG, "CRITICAL ERROR in Create Open Table: $e")
-            failure = e.plainText()
+            failure = e.userText()
             warming = false
         }
     }
@@ -332,7 +333,7 @@ fun HangoutComposerPage() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Toaster.show("Error publishing: ${e.asDartString()}")
+                Toaster.show("Error publishing: ${e.userText()}")
             } finally {
                 sending = false
             }

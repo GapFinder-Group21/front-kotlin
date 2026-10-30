@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AccountRepository
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.kit.FormField
 import co.gapfinder.mobile.ui.kit.NightHeader
 import co.gapfinder.mobile.ui.kit.OfflineNote
@@ -77,7 +78,7 @@ fun SignInPage() {
                 // Limpia la pila y va al inicio
                 StackNavigator.resetTo(Destination.Home)
             } catch (e: Exception) {
-                Toaster.show(e.message ?: e.toString(), background = Color(0xFFFF5252))
+                Toaster.show(e.userText(), background = Color(0xFFFF5252))
             } finally {
                 working = false
             }

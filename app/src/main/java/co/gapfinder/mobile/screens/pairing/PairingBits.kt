@@ -67,9 +67,6 @@ internal fun TextStyle.asBody(size: Float = 14f, tint: Color, spacing: Float = 0
 internal fun TextStyle.asButtonText(size: Float = 14f, tint: Color): TextStyle =
     asBody(size, tint, 0.1f)
 
-/** Equivalente al `$e` de Dart para una Exception. */
-internal fun Throwable.dartText(): String = "Exception: $message"
-
 /** Sombra estilo BoxShadow (mismo sigma que Flutter). */
 internal fun Modifier.dropGlow(tint: Color, blur: Dp, dy: Dp, corner: Dp, base: Color): Modifier =
     drawBehind {

@@ -44,6 +44,7 @@ import co.gapfinder.mobile.ui.nav.Toaster
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
+import co.gapfinder.mobile.foundation.userText
 import java.time.LocalDateTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -79,7 +80,7 @@ fun PairingCandidatePage(memberId: Int, currentWindowId: Int, prospect: PairingP
                 throw e
             } catch (e: Exception) {
                 requesting = false
-                Toaster.show("Error sending request: ${e.dartText()}")
+                Toaster.show("Error sending request: ${e.userText()}")
             }
         }
     }

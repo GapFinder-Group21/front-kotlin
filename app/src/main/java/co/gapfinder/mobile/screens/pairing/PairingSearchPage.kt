@@ -36,6 +36,7 @@ import co.gapfinder.mobile.data.PairingRepository
 import co.gapfinder.mobile.data.WindowRepository
 import co.gapfinder.mobile.domain.PairingFocus
 import co.gapfinder.mobile.foundation.Chrono
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.theme.Palette
@@ -95,7 +96,7 @@ fun PairingSearchPage(memberId: Int, focus: PairingFocus) {
             throw e
         } catch (e: Exception) {
             if (abandoned) return@LaunchedEffect
-            outcome = LookupOutcome.Broke(e.dartText())
+            outcome = LookupOutcome.Broke(e.userText())
         }
     }
 

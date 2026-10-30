@@ -40,6 +40,7 @@ import co.gapfinder.mobile.domain.Lecture
 import co.gapfinder.mobile.domain.Weekday
 import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
@@ -109,7 +110,7 @@ fun TimetableTab(isActive: Boolean) {
                 Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
 
                 is Fetch.Broken -> Text(
-                    text = "No se pudo cargar tu horario.\n${state.cause.dartStyleText()}",
+                    text = "Couldn't load your schedule.\n${state.cause.userText()}",
                     textAlign = TextAlign.Center,
                     style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.6f)),
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),

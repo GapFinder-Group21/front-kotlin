@@ -41,5 +41,3 @@ internal fun twelveHourClock(hour: Int, minute: Int): String {
     return "${if (h == 0) 12 else h}:${minute.toString().padStart(2, '0')}"
 }
 
-/** Texto de error como lo mostraba Dart con `${error}` sobre un Exception. */
-internal fun Throwable.dartStyleText(): String = "Exception: ${message ?: toString()}"
