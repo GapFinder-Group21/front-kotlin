@@ -645,10 +645,11 @@ object AttendeeRepository {
 // ============================================================ Abandonos del formulario de mesa
 
 object DropOffRepository {
-    const val PATH = "/open-table-abandonments"
+    /** POST /open-table-abandonments/user/{userId}; también la usa la cola de acciones. */
+    fun logPath(memberId: Int): String = "/open-table-abandonments/user/$memberId"
 
     suspend fun log(dropOff: HangoutDropOff) {
-        HttpGateway.send(PATH, dropOff.encode()).expect(201, "Error registering abandonment")
+        HttpGateway.send(logPath(dropOff.memberId), dropOff.encode()).expect(201, "Error registering abandonment")
     }
 
     /** GET /open-table-abandonments/stats?since= — abandonos por paso desde esa fecha. */

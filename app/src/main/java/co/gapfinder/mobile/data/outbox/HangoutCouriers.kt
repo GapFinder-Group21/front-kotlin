@@ -24,7 +24,10 @@ object HangoutCouriers {
     internal fun registerAll() {
         Outbox.register(CREATE, CreateCourier)
         Outbox.register(JOIN, JoinCourier)
-        Outbox.register(DROP_OFF) { payload -> HttpGateway.send(DropOffRepository.PATH, payload).toDelivery() }
+        // La ruta se arma al enviar, así también salen bien los reportes que ya estaban en la cola
+        Outbox.register(DROP_OFF) { payload ->
+            HttpGateway.send(DropOffRepository.logPath(payload.getInt("userId")), payload).toDelivery()
+        }
     }
 
     // ============================================================ Encolar
