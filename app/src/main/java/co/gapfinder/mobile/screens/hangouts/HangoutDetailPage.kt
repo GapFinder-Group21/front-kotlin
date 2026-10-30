@@ -217,7 +217,7 @@ fun HangoutDetailPage(hangoutId: Int) {
                     Row(Modifier.fillMaxWidth()) {
                         FactTile(Glyphs.locationOnRounded, "Location", table.spot?.name ?: "Unknown")
                         Spacer(Modifier.width(12.dp))
-                        FactTile(Glyphs.accessTimeFilledRounded, "Ends in", "${table.minutesLeft()} min")
+                        FactTile(Glyphs.accessTimeFilledRounded, "Ends in", table.timeLeftText())
                     }
 
                     Spacer(Modifier.height(28.dp))

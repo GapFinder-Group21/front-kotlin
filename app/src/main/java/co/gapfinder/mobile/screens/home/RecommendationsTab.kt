@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +46,7 @@ import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.Recommendation
 import co.gapfinder.mobile.foundation.userText
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.screens.hangouts.timeLeftText
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.Portrait
 import co.gapfinder.mobile.ui.kit.inkTap
@@ -54,8 +56,6 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
-import java.time.Duration
-import java.time.LocalDateTime
 
 /**
  * Pestaña "Suggest": edificio que más frecuenta el usuario y las mesas abiertas que hay ahí
@@ -333,7 +333,6 @@ private fun NoSuggestions() {
 
 @Composable
 private fun SuggestedCard(table: Hangout) {
-    val minutesLeft = Duration.between(LocalDateTime.now(), table.endsAt).toMinutes()
     val shape = RoundedCornerShape(18.dp)
 
     Column(
@@ -361,9 +360,13 @@ private fun SuggestedCard(table: Hangout) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Glyphs.locationOnRounded, contentDescription = null, tint = Palette.Teal, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
+                    // El lugar se recorta con "…" para que el tiempo restante quepa en una sola línea
                     Text(
                         text = table.spot?.name ?: "Unknown location",
                         style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 12.sp, color = Palette.Ink.fade(0.5f)),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     Spacer(Modifier.width(8.dp))
                     Icon(
@@ -374,8 +377,10 @@ private fun SuggestedCard(table: Hangout) {
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "${minutesLeft}m left",
+                        text = "${table.timeLeftText()} left",
                         style = Typo.paragraph().copy(fontSize = 12.sp, color = Palette.Ink.fade(0.45f)),
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }
