@@ -18,6 +18,9 @@ import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.TableRestaurant
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.BrightnessAuto
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.AccessTimeFilled
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
@@ -97,6 +100,9 @@ object Glyphs {
     val tableRestaurantOutlined: ImageVector = Icons.Outlined.TableRestaurant
     val tableBarRounded: ImageVector = Icons.Rounded.TableBar
     val cloudOff: ImageVector = Icons.Filled.CloudOff
+    val brightnessAutoRounded: ImageVector = Icons.Rounded.BrightnessAuto
+    val lightModeRounded: ImageVector = Icons.Rounded.LightMode
+    val darkModeRounded: ImageVector = Icons.Rounded.DarkMode
     val closeRounded: ImageVector = Icons.Rounded.Close
     val searchRounded: ImageVector = Icons.Rounded.Search
     val clearRounded: ImageVector = Icons.Rounded.Clear

@@ -11,14 +11,21 @@ import co.gapfinder.mobile.foundation.ThemeMode
  * Decide si la app va en oscuro. Se suscribe al modo del sensor (Observer): cuando el sensor
  * cambia de modo, esto se recompone y el tema cambia. Ninguna pantalla sabe que hay un sensor.
  * Sin sensor (o sin lectura útil) se sigue el tema del sistema.
+ * Si el estudiante fijó Claro u Oscuro en el selector ([ThemeSettings]), eso manda.
  */
 @Composable
 fun rememberDarkTheme(): Boolean {
+    val choice by ThemeSettings.choice.collectAsState()
     val sensed by AmbientLightMonitor.mode.collectAsState()
     val system = isSystemInDarkTheme()
-    return when (sensed) {
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
-        ThemeMode.SYSTEM -> system
+    return when (choice) {
+        // Fijado a mano: el sensor no cuenta
+        ThemeChoice.LIGHT -> false
+        ThemeChoice.DARK -> true
+        ThemeChoice.AUTO -> when (sensed) {
+            ThemeMode.DARK -> true
+            ThemeMode.LIGHT -> false
+            ThemeMode.SYSTEM -> system
+        }
     }
 }

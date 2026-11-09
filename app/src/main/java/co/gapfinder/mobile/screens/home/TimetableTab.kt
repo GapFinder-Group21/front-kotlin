@@ -41,6 +41,7 @@ import co.gapfinder.mobile.domain.Weekday
 import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.userText
+import co.gapfinder.mobile.ui.kit.ThemeToggle
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
@@ -91,19 +92,33 @@ fun TimetableTab(isActive: Boolean) {
             .background(Palette.Fog)
             .statusBarsPadding()
     ) {
-        // Cabecera oscura
-        Text(
-            text = "GAP FINDER",
-            style = Typo.heading(FontWeight.Black).copy(
-                fontSize = 20.sp,
-                color = Palette.White,
-                letterSpacing = 1.5.sp,
-            ),
+        // Cabecera con el selector de tema a la derecha
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Palette.Ink)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-        )
+                .padding(
+                    start = 20.dp,
+                    end = 8.dp,
+                    top = 4.dp,
+                    bottom = 4.dp,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "GAP FINDER",
+                style = Typo.heading(FontWeight.Black).copy(
+                    fontSize = 20.sp,
+                    color = Palette.White,
+                    letterSpacing = 1.5.sp,
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 10.dp),
+            )
+
+            ThemeToggle(tint = Palette.White)
+        }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val state = outcome) {

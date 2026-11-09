@@ -10,6 +10,7 @@ import co.gapfinder.mobile.data.outbox.Outbox
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.AmbientLightMonitor
+import co.gapfinder.mobile.ui.theme.ThemeSettings
 
 class GapFinderApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
@@ -19,6 +20,7 @@ class GapFinderApplication : Application(), ImageLoaderFactory {
         LocalStore.attach(this)
         Outbox.attach(this)
         AmbientLightMonitor.attach(this)
+        ThemeSettings.attach(this)
     }
 
     /** Coil guarda las fotos en memoria (25 % de la RAM disponible) y en disco (50 MB), para verlas sin red. */
