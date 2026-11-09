@@ -40,6 +40,8 @@ data class MyHangoutEntity(
     /** Solo en el mapa: si el usuario ya participa en la mesa. */
     val joined: Boolean = false,
     val photoUrl: String? = null,
+    /** Stored for offline mobility filtering. */
+    val floor: Int? = null,
     val savedAt: LocalDateTime,
 )
 

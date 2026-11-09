@@ -67,6 +67,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import co.gapfinder.mobile.ui.kit.HangoutPhoto as CachedHangoutPhoto
+import androidx.compose.runtime.collectAsState
+import co.gapfinder.mobile.data.MobilityFilter
+import co.gapfinder.mobile.data.MobilityScope
+import co.gapfinder.mobile.data.local.MobilityStore
+import co.gapfinder.mobile.ui.kit.MobilityNote
 
 private const val TAG = "HangoutMapTab"
 private const val GPS_REQUIRED = "Location is required to discover tables nearby."
@@ -86,6 +91,18 @@ fun HangoutMapTab() {
     var savedAt by remember { mutableStateOf<LocalDateTime?>(null) }
     val online by rememberOnline()
     val scope = rememberCoroutineScope()
+
+    var mobility by remember {
+        mutableStateOf(MobilityScope.Open)
+    }
+
+    val mobilityVersion by MobilityStore.changes.collectAsState()
+
+    LaunchedEffect(mobilityVersion, online) {
+        SessionVault.memberId()?.let { memberId ->
+            mobility = MobilityFilter.prepare(memberId)
+        }
+    }
 
     suspend fun refreshBoard() {
         notice = null
@@ -168,6 +185,19 @@ fun HangoutMapTab() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         MapBlock()
+                        MobilityNote(
+                            preference = mobility.preference,
+                            hidden = listings.size - mobility.keep(listings).size,
+                            distanceUnknown = mobility.distanceUnknown,
+                            onEdit = {
+                                StackNavigator.go(Destination.MobilityPreference)
+                            },
+                            modifier = Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 8.dp,
+                            ),
+                        )
                         savedAt?.let { moment ->
                             OfflineNote(
                                 "${if (online) "Couldn't refresh" else "No connection"} · ${lastUpdatedText(moment)}",
@@ -176,7 +206,7 @@ fun HangoutMapTab() {
                         }
                         ListingBlock(
                             notice = notice,
-                            listings = listings,
+                            listings = mobility.keep(listings),
                             viewerId = viewerId,
                             joinedIds = joinedIds,
                             onRetry = { scope.launch { refreshBoard() } },

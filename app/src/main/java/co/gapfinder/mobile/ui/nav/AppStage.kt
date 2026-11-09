@@ -32,6 +32,7 @@ import co.gapfinder.mobile.screens.pairing.PairingConfirmedPage
 import co.gapfinder.mobile.screens.pairing.PairingInvitePage
 import co.gapfinder.mobile.screens.pairing.PairingPendingPage
 import co.gapfinder.mobile.screens.pairing.PairingSearchPage
+import co.gapfinder.mobile.screens.settings.MobilityPreferencePage
 import co.gapfinder.mobile.ui.kit.BannerMode
 import co.gapfinder.mobile.ui.kit.OfflineBanner
 import co.gapfinder.mobile.ui.kit.rememberBannerMode
@@ -111,6 +112,7 @@ private fun Render(destination: Destination) {
         Destination.MyHangouts -> MyHangoutsPage()
         is Destination.HangoutDetail -> HangoutDetailPage(destination.hangoutId)
         is Destination.WindowDetail -> WindowDetailPage(destination.windowId)
+        Destination.MobilityPreference -> MobilityPreferencePage()
         is Destination.Unmapped -> Unit
     }
 }

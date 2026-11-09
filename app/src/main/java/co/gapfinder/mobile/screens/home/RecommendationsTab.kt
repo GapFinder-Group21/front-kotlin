@@ -57,6 +57,14 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
 import co.gapfinder.mobile.ui.kit.HangoutPhoto as CachedHangoutPhoto
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import co.gapfinder.mobile.data.MobilityFilter
+import co.gapfinder.mobile.data.MobilityScope
+import co.gapfinder.mobile.data.SuggestionLog
+import co.gapfinder.mobile.data.local.MobilityStore
+import co.gapfinder.mobile.ui.kit.MobilityNote
+import kotlinx.coroutines.launch
 
 /**
  * Pestaña "Suggest": edificio que más frecuenta el usuario y las mesas abiertas que hay ahí
@@ -66,15 +74,42 @@ import co.gapfinder.mobile.ui.kit.HangoutPhoto as CachedHangoutPhoto
 @Composable
 fun RecommendationsTab(isActive: Boolean) {
     var cycle by remember { mutableIntStateOf(0) }
-    var outcome by remember { mutableStateOf<Fetch<Recommendation>>(Fetch.Waiting) }
 
-    LaunchedEffect(cycle) {
+    var outcome by remember {
+        mutableStateOf<Fetch<Recommendation>>(Fetch.Waiting)
+    }
+
+    var mobility by remember {
+        mutableStateOf(MobilityScope.Open)
+    }
+
+    val mobilityVersion by MobilityStore.changes.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(cycle, mobilityVersion) {
         outcome = Fetch.Waiting
+
         outcome = try {
-            val me = SessionVault.memberId() ?: throw Exception("No user session found")
-            // La primera vez se usa lo que HomeWarmup ya cargó en paralelo; si falló, se intenta de nuevo
-            val warm = HomeWarmup.takeRecommendation(me)?.getOrNull()
-            Fetch.Done(warm ?: RecommendationRepository.hangoutsFor(me))
+            val me = SessionVault.memberId()
+                ?: throw Exception("No user session found")
+
+            // Prepare the filter before displaying or recording suggestions.
+            mobility = MobilityFilter.prepare(me)
+
+            // Keep the initial Home warmup, but do not reuse it after
+            // a refresh or a change to the mobility preference.
+            val warm = if (cycle == 0 && mobilityVersion == 0) {
+                HomeWarmup.takeRecommendation(me)?.getOrNull()
+            } else {
+                null
+            }
+
+            val data = warm ?: RecommendationRepository.hangoutsFor(
+                memberId = me,
+                force = cycle > 0 || mobilityVersion > 0,
+            )
+
+            Fetch.Done(data)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -87,7 +122,16 @@ fun RecommendationsTab(isActive: Boolean) {
         cycle++
     }
 
-    OnTabWake(isActive) { reload() }
+    OnTabWake(isActive) {
+        reload()
+    }
+
+    val editMobility: () -> Unit = {
+        scope.launch {
+            StackNavigator.goAndWait(Destination.MobilityPreference)
+            reload()
+        }
+    }
 
     Column(
         Modifier
@@ -95,11 +139,15 @@ fun RecommendationsTab(isActive: Boolean) {
             .background(Palette.Fog)
             .statusBarsPadding()
     ) {
-        SuggestHeader()
+        SuggestHeader(onTune = editMobility)
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val state = outcome) {
-                Fetch.Waiting -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp))
+                Fetch.Waiting -> CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(36.dp),
+                )
 
                 is Fetch.Broken -> LoadFailure(
                     detail = state.cause.userText(),
@@ -113,15 +161,58 @@ fun RecommendationsTab(isActive: Boolean) {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     val data = state.value
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-                        item { FavoriteSpotCard(data) }
-                        item { Spacer(Modifier.height(28.dp)) }
-                        item { SuggestedCaption(total = data.hangouts.size) }
-                        item { Spacer(Modifier.height(14.dp)) }
-                        if (data.hangouts.isEmpty()) {
-                            item { NoSuggestions() }
+                    val shown = mobility.keep(data.hangouts)
+
+                    LaunchedEffect(shown.map { it.id }, mobility) {
+                        SessionVault.memberId()?.let { memberId ->
+                            SuggestionLog.suggested(
+                                memberId,
+                                shown,
+                                mobility,
+                            )
+                        }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                    ) {
+                        item {
+                            FavoriteSpotCard(data)
+                        }
+
+                        item {
+                            Spacer(Modifier.height(28.dp))
+                        }
+
+                        item {
+                            SuggestedCaption(total = shown.size)
+                        }
+
+                        if (mobility.preference.isActive) {
+                            item {
+                                MobilityNote(
+                                    preference = mobility.preference,
+                                    hidden = data.hangouts.size - shown.size,
+                                    distanceUnknown = mobility.distanceUnknown,
+                                    onEdit = editMobility,
+                                    modifier = Modifier.padding(top = 12.dp),
+                                )
+                            }
+                        }
+
+                        item {
+                            Spacer(Modifier.height(14.dp))
+                        }
+
+                        if (shown.isEmpty()) {
+                            item {
+                                NoSuggestions()
+                            }
                         } else {
-                            items(data.hangouts) { table -> SuggestedCard(table) }
+                            items(shown) { table ->
+                                SuggestedCard(table)
+                            }
                         }
                     }
                 }
@@ -129,9 +220,8 @@ fun RecommendationsTab(isActive: Boolean) {
         }
     }
 }
-
 @Composable
-private fun SuggestHeader() {
+private fun SuggestHeader(onTune: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -144,9 +234,16 @@ private fun SuggestHeader() {
                 .background(Palette.Teal.fade(0.15f), CircleShape)
                 .padding(8.dp)
         ) {
-            Icon(Glyphs.lightbulbRounded, contentDescription = null, tint = Palette.Teal, modifier = Modifier.size(22.dp))
+            Icon(
+                imageVector = Glyphs.lightbulbRounded,
+                contentDescription = null,
+                tint = Palette.Teal,
+                modifier = Modifier.size(22.dp),
+            )
         }
+
         Spacer(Modifier.width(12.dp))
+
         Text(
             text = "Recommendation",
             style = Typo.heading(FontWeight.Black).copy(
@@ -154,7 +251,22 @@ private fun SuggestHeader() {
                 color = Palette.White,
                 letterSpacing = 0.5.sp,
             ),
+            modifier = Modifier.weight(1f),
         )
+
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .inkTap(CircleShape, onTap = onTune),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Glyphs.tuneRounded,
+                contentDescription = "Mobility preference",
+                tint = Palette.White,
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 

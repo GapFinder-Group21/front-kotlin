@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.HangoutRepository
+import co.gapfinder.mobile.data.MobilityFilter
+import co.gapfinder.mobile.data.SuggestionLog
 import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.data.outbox.HangoutCouriers
 import co.gapfinder.mobile.domain.Hangout
@@ -130,12 +132,20 @@ fun HangoutDetailPage(hangoutId: Int) {
         }
     }
 
+    // BQ 14: si la mesa venía de una recomendación, se registra que el estudiante la aceptó
+    fun logAccepted(me: Int) {
+        val table = (phase as? DetailPhase.Loaded)?.hangout ?: return
+        if (!SuggestionLog.wasSuggested(table.id)) return
+        scope.launch { SuggestionLog.accepted(me, table, MobilityFilter.prepare(me)) }
+    }
+
     fun enroll() {
         val me = viewerId ?: return
         scope.launch {
             // Sin red ni se intenta: la solicitud va directo a la cola
             if (!Connectivity.isOnline()) {
                 HangoutCouriers.enqueueJoin(hangoutId, me)
+                logAccepted(me)
                 joinQueued = true
                 Toaster.show("No connection: you'll join the table when you're back online")
                 return@launch
@@ -143,12 +153,14 @@ fun HangoutDetailPage(hangoutId: Int) {
             joining = true
             try {
                 AttendeeRepository.join(hangoutId, me)
+                logAccepted(me)
                 Toaster.show("Successfully joined the table!", background = Palette.Teal)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: IOException) {
                 // Sin red: la solicitud queda en la cola y se manda cuando vuelva la conexión
                 HangoutCouriers.enqueueJoin(hangoutId, me)
+                logAccepted(me)
                 joinQueued = true
                 Toaster.show("No connection: you'll join the table when you're back online")
             } catch (e: Exception) {

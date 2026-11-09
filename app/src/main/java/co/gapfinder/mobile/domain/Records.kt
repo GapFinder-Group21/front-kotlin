@@ -391,6 +391,8 @@ data class Hangout(
     val spot: CampusSpot? = null,
     /** URL relativa de la foto (/uploads/open-tables/...); null en mesas sin foto. */
     val photoUrl: String? = null,
+    /** Floor where the hangout takes place; null when unavailable. */
+    val floor: Int? = null,
 ) {
     /** createdAt no se manda: en el backend la columna no es actualizable. */
     fun encode(): JSONObject = jsonOf(
@@ -419,6 +421,7 @@ data class Hangout(
             host = j.nodeOrNull("creator")?.let(Member::decode),
             spot = j.nodeOrNull("building")?.let(CampusSpot::decode),
             photoUrl = j.textOrNull("photoUrl") ?: j.textOrNull("imageUrl"),
+            floor = j.intOrNull("floor"),
         )
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Accessible
 import androidx.compose.material.icons.rounded.AccessTimeFilled
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.TableBar
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -96,6 +98,8 @@ object Glyphs {
     val historyRounded: ImageVector = Icons.Rounded.History
     val editCalendarRounded: ImageVector = Icons.Rounded.EditCalendar
     val directionsWalkRounded: ImageVector = Icons.Rounded.DirectionsWalk
+    val accessibleRounded: ImageVector = Icons.Rounded.Accessible
+    val tuneRounded: ImageVector = Icons.Rounded.Tune
     val coffeeMakerRounded: ImageVector = Icons.Rounded.CoffeeMaker
     val tableRestaurantOutlined: ImageVector = Icons.Outlined.TableRestaurant
     val tableBarRounded: ImageVector = Icons.Rounded.TableBar

@@ -21,9 +21,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PendingActionEntity::class,
         CatalogEntity::class,
     ],
-    // 2: tabla pending_actions (cola de acciones sin red)
-    // 3: tabla catalogs y mesas del mapa (rol BOARD) en my_hangouts
-    version = 4,
+// 2: tabla pending_actions (cola de acciones sin red)
+// 3: tabla catalogs y mesas del mapa (rol BOARD) en my_hangouts
+// 4: photoUrl en my_hangouts
+// 5: floor en my_hangouts
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(RoomConverters::class)
@@ -47,6 +49,14 @@ abstract class GapFinderDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE my_hangouts ADD COLUMN photoUrl TEXT")
             }
         }
+        /** Adds the floor without deleting existing local data. */
+        private val ADD_FLOOR = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE my_hangouts ADD COLUMN floor INTEGER"
+                )
+            }
+        }
 
         @Volatile
         private var instance: GapFinderDatabase? = null
@@ -54,7 +64,7 @@ abstract class GapFinderDatabase : RoomDatabase() {
         fun get(context: Context): GapFinderDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(context.applicationContext, GapFinderDatabase::class.java, FILE)
-                    .addMigrations(ADD_PHOTO_URL)
+                    .addMigrations(ADD_PHOTO_URL, ADD_FLOOR)
                     // Casi todo es una copia del backend que se vuelve a bajar; lo único que se pierde
                     // si cambia el esquema es un borrador del wizard sin publicar
                     .fallbackToDestructiveMigration(dropAllTables = true)

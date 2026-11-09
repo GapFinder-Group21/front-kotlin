@@ -65,6 +65,9 @@ sealed interface Destination {
     /** '/gap-detail' */
     data class WindowDetail(val windowId: Int) : Destination
 
+    /** Ajuste de preferencia de movilidad (BQ 14). */
+    data object MobilityPreference : Destination
+
     /**
      * Ruta que no está registrada. Se ignora de forma segura en vez de romper la app
      * (en Flutter un pushNamed a una ruta inexistente lanza una excepción).

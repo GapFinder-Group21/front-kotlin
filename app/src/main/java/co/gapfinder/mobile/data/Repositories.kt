@@ -4,6 +4,7 @@ import android.util.Log
 import co.gapfinder.mobile.data.cache.Cached
 import co.gapfinder.mobile.data.cache.SharedCache
 import co.gapfinder.mobile.data.local.LocalStore
+import co.gapfinder.mobile.data.local.MobilityStore
 import co.gapfinder.mobile.foundation.TtlCache
 import co.gapfinder.mobile.domain.Alert
 import co.gapfinder.mobile.domain.Bond
@@ -135,6 +136,8 @@ object AccountRepository {
         LocalStore.wipe()
         Caches.clear()
         SharedCache.clear()
+        MobilityStore.wipe()
+        SuggestionLog.reset()
     }
 
     private suspend fun persist(ticket: LoginTicket): LoginTicket {
@@ -717,6 +720,26 @@ object DropOffRepository {
 
 object RecommendationRepository {
 
+    private fun mobilityQuery(memberId: Int): String {
+        val preference = MobilityStore.read(memberId)
+
+        val params = buildList {
+            preference.maxWalkMeters?.let {
+                add("maxWalkMeters=$it")
+            }
+
+            if (preference.groundFloorOnly) {
+                add("groundFloorOnly=true")
+            }
+        }
+
+        return if (params.isEmpty()) {
+            ""
+        } else {
+            params.joinToString("&", prefix = "?")
+        }
+    }
+
     /** Uses cached recommendations unless a refresh is requested. */
     suspend fun hangoutsFor(
         memberId: Int,
@@ -737,7 +760,7 @@ object RecommendationRepository {
 
     private suspend fun fetchFor(memberId: Int): Recommendation {
         val reply = HttpGateway.fetch(
-            "/recommendations/user/$memberId/open-tables"
+            "/recommendations/user/$memberId/open-tables${mobilityQuery(memberId)}"
         )
 
         Log.d(
