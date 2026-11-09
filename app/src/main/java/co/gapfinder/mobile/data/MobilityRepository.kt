@@ -3,10 +3,12 @@ package co.gapfinder.mobile.data
 import android.util.Log
 import co.gapfinder.mobile.data.local.MobilityStore
 import co.gapfinder.mobile.data.outbox.Delivery
+import co.gapfinder.mobile.data.outbox.Outbox
 import co.gapfinder.mobile.data.outbox.toDelivery
 import co.gapfinder.mobile.domain.MobilityPreference
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.HttpGateway
+import co.gapfinder.mobile.foundation.jsonOf
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
 
@@ -17,6 +19,18 @@ private const val TAG = "MobilityRepository"
  * [MobilityStore] y después se manda al backend, que la usa para filtrar sus consultas.
  */
 object MobilityRepository {
+    /** Tipo de acción en la cola: sincronizar la preferencia del usuario. */
+    const val COURIER = "mobility.sync"
+
+    /**
+     * Se registra una vez al abrir la app. La acción solo lleva el usuario: al enviarla se manda
+     * lo que haya en el teléfono en ese momento, así que varios cambios sin red terminan en un solo PUT
+     * con el último valor.
+     */
+    fun registerCourier() {
+        Outbox.register(COURIER) { payload -> push(payload.getInt("memberId")) }
+    }
+
     /** GET / PUT /users/{userId}/mobility-preference */
     fun path(memberId: Int) = "/users/$memberId/mobility-preference"
 
@@ -46,12 +60,19 @@ object MobilityRepository {
 
     /**
      * Guarda la preferencia en el teléfono y la intenta mandar. Devuelve true si ya llegó al
-     * backend. Las recomendaciones en caché se invalidan porque dependen del filtro.
+     * backend; si no hay red (o el servidor no responde) queda en la cola de acciones y se
+     * sincroniza sola cuando vuelva la conexión. Las recomendaciones en caché se invalidan
+     * porque dependen del filtro.
      */
     suspend fun save(memberId: Int, preference: MobilityPreference): Boolean {
         MobilityStore.write(memberId, preference, pending = true)
         RecommendationRepository.invalidate(memberId)
-        return push(memberId) == Delivery.Sent
+        val delivery = push(memberId)
+        if (delivery is Delivery.Retry) {
+            Outbox.enqueue(COURIER, jsonOf("memberId" to memberId), memberId = memberId)
+            Log.d(TAG, "📥 Preference queued (${delivery.reason})")
+        }
+        return delivery == Delivery.Sent
     }
 
     /** Manda al backend lo que haya en el teléfono (siempre la última versión). */

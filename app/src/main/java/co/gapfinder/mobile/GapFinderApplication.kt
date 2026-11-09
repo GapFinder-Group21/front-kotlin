@@ -11,6 +11,7 @@ import co.gapfinder.mobile.foundation.ImageCaching
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.theme.ThemeSettings
 import co.gapfinder.mobile.data.local.MobilityStore
+import co.gapfinder.mobile.data.MobilityRepository
 
 class GapFinderApplication : Application(), ImageLoaderFactory {
 
@@ -20,6 +21,7 @@ class GapFinderApplication : Application(), ImageLoaderFactory {
         Connectivity.attach(this)
         LocalStore.attach(this)
         MobilityStore.attach(this)
+        MobilityRepository.registerCourier()
         Outbox.attach(this)
         AmbientLightMonitor.attach(this)
         ThemeSettings.attach(this)

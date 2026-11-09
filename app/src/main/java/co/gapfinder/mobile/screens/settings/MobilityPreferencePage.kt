@@ -38,9 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.MobilityRepository
 import co.gapfinder.mobile.domain.MobilityPreference
+import co.gapfinder.mobile.data.local.MobilityStore
 import co.gapfinder.mobile.foundation.SessionVault
+import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.InkHeader
+import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.nav.Toaster
@@ -72,6 +75,9 @@ fun MobilityPreferencePage() {
     var meters by remember { mutableFloatStateOf(DEFAULT_METERS) }
     var groundFloorOnly by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // Hay un cambio guardado en el teléfono que todavía no llegó al backend
+    var pending by remember { mutableStateOf(false) }
+    val online by rememberOnline()
 
     fun show(preference: MobilityPreference) {
         limitDistance = preference.maxWalkMeters != null
@@ -84,7 +90,9 @@ fun MobilityPreferencePage() {
         memberId = me
         // Primero lo del teléfono; después lo del backend, por si la eligió en otro dispositivo
         show(MobilityRepository.current(me))
+        pending = MobilityStore.isPending(me)
         loaded = true
+        // Sin red refresh devuelve lo del teléfono sin intentar la red
         show(MobilityRepository.refresh(me))
     }
 
@@ -94,7 +102,7 @@ fun MobilityPreferencePage() {
         scope.launch {
             val synced = MobilityRepository.save(me, preference)
             Toaster.show(
-                if (synced) "Mobility preference saved" else "Saved on your phone. It syncs when the server is reachable.",
+                if (synced) "Mobility preference saved" else "Saved on your phone. It syncs when you're back online.",
                 background = Palette.Teal,
             )
             saving = false
@@ -123,6 +131,15 @@ fun MobilityPreferencePage() {
                 style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.6f)),
             )
             Spacer(Modifier.height(24.dp))
+
+            // Sin red se puede cambiar igual: se filtra con lo del teléfono y se sincroniza después
+            if (!online || pending) {
+                OfflineNote(
+                    if (!online) "No connection. You can still save: it's used right away and syncs when you're back online."
+                    else "Your last change is saved on this phone and will sync shortly."
+                )
+                Spacer(Modifier.height(16.dp))
+            }
 
             PreferenceCard(
                 glyph = Glyphs.directionsWalkRounded,
