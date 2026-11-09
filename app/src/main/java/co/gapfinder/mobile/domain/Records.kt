@@ -418,7 +418,7 @@ data class Hangout(
             pastime = j.nodeOrNull("activity")?.let(Pastime::decode),
             host = j.nodeOrNull("creator")?.let(Member::decode),
             spot = j.nodeOrNull("building")?.let(CampusSpot::decode),
-            photoUrl = j.textOrNull("photoUrl"),
+            photoUrl = j.textOrNull("photoUrl") ?: j.textOrNull("imageUrl"),
         )
     }
 }

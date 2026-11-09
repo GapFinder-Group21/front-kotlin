@@ -1,6 +1,8 @@
 package co.gapfinder.mobile.data
 
 import android.util.Log
+import co.gapfinder.mobile.data.cache.Cached
+import co.gapfinder.mobile.data.cache.SharedCache
 import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.foundation.TtlCache
 import co.gapfinder.mobile.domain.Alert
@@ -132,6 +134,7 @@ object AccountRepository {
         SessionVault.wipe()
         LocalStore.wipe()
         Caches.clear()
+        SharedCache.clear()
     }
 
     private suspend fun persist(ticket: LoginTicket): LoginTicket {
@@ -204,26 +207,45 @@ object Caches {
 }
 
 object HobbyRepository {
-    /** Primero el caché (vigente 24 h); si no hay, GET /interests. */
-    suspend fun all(): List<Hobby> = Caches.hobbies.getOrLoad(Caches.ALL) {
-        HttpGateway.fetch("/interests").expectOrExplain(200, "Error getting interests").many(Hobby::decode)
-    }
+
+    /** Uses the memory cache unless a refresh is requested. */
+    suspend fun all(force: Boolean = false): List<Hobby> =
+        SharedCache.hobbies.getOrLoad(SharedCache.ALL, force) {
+            HttpGateway.fetch("/interests")
+                .expectOrExplain(200, "Error getting interests")
+                .many(Hobby::decode)
+        }
 
     suspend fun byId(id: Int): Hobby =
-        Hobby.decode(HttpGateway.fetch("/interests/$id").expectOrExplain(200, "Error getting interest").json)
+        Hobby.decode(
+            HttpGateway.fetch("/interests/$id")
+                .expectOrExplain(200, "Error getting interest")
+                .json
+        )
 
-    /** El nombre es obligatorio y único. */
     suspend fun add(hobby: Hobby): Hobby =
-        Hobby.decode(HttpGateway.send("/interests", hobby.encode()).expectOrExplain(201, "Error creating interest").json)
-            .also { Caches.hobbies.clear() }
+        Hobby.decode(
+            HttpGateway.send("/interests", hobby.encode())
+                .expectOrExplain(201, "Error creating interest")
+                .json
+        ).also {
+            SharedCache.hobbies.clear()
+        }
 
     suspend fun edit(id: Int, hobby: Hobby): Hobby =
-        Hobby.decode(HttpGateway.overwrite("/interests/$id", hobby.encode()).expectOrExplain(200, "Error updating interest").json)
-            .also { Caches.hobbies.clear() }
+        Hobby.decode(
+            HttpGateway.overwrite("/interests/$id", hobby.encode())
+                .expectOrExplain(200, "Error updating interest")
+                .json
+        ).also {
+            SharedCache.hobbies.clear()
+        }
 
     suspend fun drop(id: Int) {
-        HttpGateway.erase("/interests/$id").expectOrExplain(204, "Error deleting interest")
-        Caches.hobbies.clear()
+        HttpGateway.erase("/interests/$id")
+            .expectOrExplain(204, "Error deleting interest")
+
+        SharedCache.hobbies.clear()
     }
 }
 
@@ -254,32 +276,65 @@ object PastimeRepository {
 // ============================================================ Edificios
 
 object SpotRepository {
-    /** Primero el caché (vigente 24 h); si no hay, GET /buildings. */
-    suspend fun all(): List<CampusSpot> = Caches.spots.getOrLoad(Caches.ALL) {
-        HttpGateway.fetch("/buildings").expectOrExplain(200, "Error getting buildings").many(CampusSpot::decode)
-    }
+
+    /** Uses the memory cache unless a refresh is requested. */
+    suspend fun all(force: Boolean = false): List<CampusSpot> =
+        SharedCache.spots.getOrLoad(SharedCache.ALL, force) {
+            HttpGateway.fetch("/buildings")
+                .expectOrExplain(200, "Error getting buildings")
+                .many(CampusSpot::decode)
+        }
+
+    /** Returns the last cached list, even when its TTL has expired. */
+    fun cached(): List<CampusSpot>? =
+        SharedCache.spots.peek(SharedCache.ALL)?.value
 
     suspend fun byId(id: Int): CampusSpot =
-        CampusSpot.decode(HttpGateway.fetch("/buildings/$id").expectOrExplain(200, "Error getting building").json)
+        CampusSpot.decode(
+            HttpGateway.fetch("/buildings/$id")
+                .expectOrExplain(200, "Error getting building")
+                .json
+        )
 
-    /** GET /buildings/locate — edificio que contiene esas coordenadas; null si el punto queda fuera de todos (404). */
-    suspend fun locate(latitude: Double, longitude: Double): CampusSpot? {
-        val reply = HttpGateway.fetch("/buildings/locate?latitude=$latitude&longitude=$longitude")
+    /** Returns null when the coordinates are outside all buildings. */
+    suspend fun locate(
+        latitude: Double,
+        longitude: Double,
+    ): CampusSpot? {
+        val reply = HttpGateway.fetch(
+            "/buildings/locate?latitude=$latitude&longitude=$longitude"
+        )
+
         if (reply.code == 404) return null
-        return CampusSpot.decode(reply.expectOrExplain(200, "Error locating building").json)
+
+        return CampusSpot.decode(
+            reply.expectOrExplain(200, "Error locating building").json
+        )
     }
 
     suspend fun add(spot: CampusSpot): CampusSpot =
-        CampusSpot.decode(HttpGateway.send("/buildings", spot.encode()).expectOrExplain(201, "Error creating building").json)
-            .also { Caches.spots.clear() }
+        CampusSpot.decode(
+            HttpGateway.send("/buildings", spot.encode())
+                .expectOrExplain(201, "Error creating building")
+                .json
+        ).also {
+            SharedCache.spots.clear()
+        }
 
     suspend fun edit(id: Int, spot: CampusSpot): CampusSpot =
-        CampusSpot.decode(HttpGateway.overwrite("/buildings/$id", spot.encode()).expectOrExplain(200, "Error updating building").json)
-            .also { Caches.spots.clear() }
+        CampusSpot.decode(
+            HttpGateway.overwrite("/buildings/$id", spot.encode())
+                .expectOrExplain(200, "Error updating building")
+                .json
+        ).also {
+            SharedCache.spots.clear()
+        }
 
     suspend fun drop(id: Int) {
-        HttpGateway.erase("/buildings/$id").expectOrExplain(204, "Error deleting building")
-        Caches.spots.clear()
+        HttpGateway.erase("/buildings/$id")
+            .expectOrExplain(204, "Error deleting building")
+
+        SharedCache.spots.clear()
     }
 }
 
@@ -661,19 +716,42 @@ object DropOffRepository {
 // ============================================================ Recomendaciones
 
 object RecommendationRepository {
-    /** GET /recommendations/user/{userId}/open-tables — mesas en el edificio que más frecuenta el usuario. */
-    suspend fun hangoutsFor(memberId: Int): Recommendation =
-        Caches.recommendations.getOrLoad(memberId) { fetchFor(memberId) }
+
+    /** Uses cached recommendations unless a refresh is requested. */
+    suspend fun hangoutsFor(
+        memberId: Int,
+        force: Boolean = false,
+    ): Recommendation =
+        SharedCache.recommendations.getOrLoad(memberId, force) {
+            fetchFor(memberId)
+        }
+
+    /** Returns the last cached result together with its freshness metadata. */
+    fun cachedFor(memberId: Int): Cached<Recommendation>? =
+        SharedCache.recommendations.peek(memberId)
+
+    /** Removes the cached recommendations for this user. */
+    fun invalidate(memberId: Int) {
+        SharedCache.recommendations.invalidate(memberId)
+    }
 
     private suspend fun fetchFor(memberId: Int): Recommendation {
-        val reply = HttpGateway.fetch("/recommendations/user/$memberId/open-tables")
-        Log.d(TAG, "REC userId=$memberId status=${reply.code} body=${reply.text}")
+        val reply = HttpGateway.fetch(
+            "/recommendations/user/$memberId/open-tables"
+        )
+
+        Log.d(
+            TAG,
+            "REC userId=$memberId status=${reply.code} body=${reply.text}"
+        )
+
         reply.expect(200, "Error getting recommendations")
-        // Trae las open tables anidadas: también se parsea fuera del hilo principal
-        return decodeOffMain { Recommendation.decode(reply.json) }
+
+        return decodeOffMain {
+            Recommendation.decode(reply.json)
+        }
     }
 }
-
 // ============================================================ Registros de ubicación
 
 object PingRepository {

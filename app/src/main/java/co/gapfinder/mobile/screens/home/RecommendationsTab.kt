@@ -56,6 +56,7 @@ import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import kotlinx.coroutines.CancellationException
+import co.gapfinder.mobile.ui.kit.HangoutPhoto as CachedHangoutPhoto
 
 /**
  * Pestaña "Suggest": edificio que más frecuenta el usuario y las mesas abiertas que hay ahí
@@ -385,7 +386,14 @@ private fun SuggestedCard(table: Hangout) {
                 }
             }
         }
-
+        CachedHangoutPhoto(
+            url = table.photoUrl,
+            modifier = Modifier.padding(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = 10.dp,
+            ),
+        )
         // Título de la mesa
         Row(
             Modifier

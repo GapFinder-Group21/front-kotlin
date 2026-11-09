@@ -66,6 +66,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+import co.gapfinder.mobile.ui.kit.HangoutPhoto as CachedHangoutPhoto
 
 private const val TAG = "HangoutMapTab"
 private const val GPS_REQUIRED = "Location is required to discover tables nearby."
@@ -415,7 +416,14 @@ private fun DiscoverCard(item: Hangout, alreadyIn: Boolean, onOpen: () -> Unit) 
                 }
             }
         }
-
+        CachedHangoutPhoto(
+            url = item.photoUrl,
+            modifier = Modifier.padding(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = 12.dp,
+            ),
+        )
         BlurbCaption()
         BlurbBox(item.description, Palette.Sky)
 

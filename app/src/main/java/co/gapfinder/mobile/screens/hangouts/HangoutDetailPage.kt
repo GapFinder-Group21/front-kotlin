@@ -74,6 +74,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.time.LocalDateTime
+import co.gapfinder.mobile.ui.kit.HangoutPhoto as CachedHangoutPhoto
 
 /** Estado de la carga (equivalente al FutureBuilder). */
 private sealed interface DetailPhase {
@@ -202,8 +203,16 @@ fun HangoutDetailPage(hangoutId: Int) {
                         OfflineNote("No connection · ${lastUpdatedText(moment)}")
                         Spacer(Modifier.height(20.dp))
                     }
-                    HangoutPhoto(table)
-                    if (table.photoUrl != null) Spacer(Modifier.height(20.dp))
+                    if (!table.photoUrl.isNullOrBlank()) {
+                        CachedHangoutPhoto(
+                            url = table.photoUrl,
+                            height = 200.dp,
+                            corner = 16.dp,
+                        )
+
+                        Spacer(Modifier.height(20.dp))
+                    }
+
                     HostCard(table)
 
                     Spacer(Modifier.height(28.dp))
