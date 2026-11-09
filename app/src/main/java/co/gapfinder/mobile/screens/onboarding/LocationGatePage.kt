@@ -33,6 +33,7 @@ import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
 import co.gapfinder.mobile.ui.nav.Toaster
+import co.gapfinder.mobile.ui.theme.LightGapColors
 import co.gapfinder.mobile.ui.theme.Palette
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
@@ -132,8 +133,9 @@ fun LocationGatePage(fromOnboarding: Boolean) {
                     .inkTap(RoundedCornerShape(50)) {
                         Toaster.show(
                             "You can use the app, but some features won't be available without location.",
-                            background = Palette.Ink.fade(0.8f),
-                            style = Typo.paragraph().copy(fontSize = 13.sp, color = Palette.White),
+                            // Fuera de un composable no se puede leer el tema: el toast usa los colores fijos del modo claro
+                            background = LightGapColors.ink.fade(0.8f),
+                            style = Typo.paragraph().copy(fontSize = 13.sp, color = LightGapColors.white),
                             durationMs = 4_000,
                         )
                         proceed()
