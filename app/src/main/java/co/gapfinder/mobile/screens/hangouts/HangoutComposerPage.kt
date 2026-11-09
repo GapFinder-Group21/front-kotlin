@@ -568,7 +568,7 @@ private fun CardSection(heading: String, body: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.White, shape)
+            .background(Palette.White, shape)
             .border(1.5.dp, Palette.Ink.fade(0.08f), shape)
             .padding(16.dp)
     ) {
@@ -768,7 +768,7 @@ private fun <T> ChoiceSheet(
         onDismissRequest = onClose,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        containerColor = Color.White,
+        containerColor = Palette.White,
         tonalElevation = 0.dp,
         dragHandle = null,
     ) {

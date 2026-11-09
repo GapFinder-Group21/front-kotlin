@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,7 +44,8 @@ import java.time.LocalDateTime
 // Piezas compartidas por las pantallas de mesas abiertas.
 
 /** Color de texto por defecto de Material 3 (onSurface). */
-internal val SurfaceText = Color(0xFF1D1B20)
+internal val SurfaceText: Color
+    @Composable get() = MaterialTheme.colorScheme.onSurface
 
 /** Primario del tema (semilla deepPurple). */
 internal val ThemePrimary = Color(0xFF65558F)
@@ -54,7 +56,8 @@ internal val LightGrey = Color(0xFFBDBDBD)
 internal val PaleGrey = Color(0xFFE0E0E0)
 
 /** Fondo de Scaffold sin color explícito. */
-internal val BareScaffold = Color(0xFFFEF7FF)
+internal val BareScaffold: Color
+    @Composable get() = MaterialTheme.colorScheme.background
 
 /** true si el usuario figura entre los participantes de la mesa. */
 internal suspend fun attends(hangoutId: Int, memberId: Int): Boolean =

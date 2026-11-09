@@ -224,7 +224,7 @@ private fun BoardHeader(viewerId: Int?) {
                 text = "Open Table",
                 style = Typo.heading(FontWeight.Black).copy(
                     fontSize = 20.sp,
-                    color = Color.White,
+                    color = Palette.White,
                     letterSpacing = 1.sp,
                 ),
             )
@@ -234,7 +234,7 @@ private fun BoardHeader(viewerId: Int?) {
             } else {
                 Text(
                     text = "Locating...",
-                    style = Typo.label().copy(fontSize = 13.sp, color = Color.White.fade(0.5f)),
+                    style = Typo.label().copy(fontSize = 13.sp, color = Palette.White.fade(0.5f)),
                 )
             }
         }
@@ -364,7 +364,7 @@ private fun DiscoverCard(item: Hangout, alreadyIn: Boolean, onOpen: () -> Unit) 
             .padding(bottom = 14.dp)
             .fillMaxWidth()
             .shadow(10.dp, shape, ambientColor = Palette.Ink.fade(0.04f), spotColor = Palette.Ink.fade(0.04f))
-            .background(Color.White, shape)
+            .background(Palette.White, shape)
             .border(1.5.dp, Palette.Ink.fade(0.07f), shape)
     ) {
         // Cabecera: anfitrión, lugar, título y tiempo restante

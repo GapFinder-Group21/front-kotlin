@@ -267,7 +267,7 @@ private fun HistoryCard(item: Hangout, owner: Boolean) {
             .padding(bottom = 16.dp)
             .fillMaxWidth()
             .shadow(10.dp, shape, ambientColor = Palette.Ink.fade(0.04f), spotColor = Palette.Ink.fade(0.04f))
-            .background(Color.White, shape)
+            .background(Palette.White, shape)
             .border(1.5.dp, Palette.Ink.fade(0.07f), shape)
     ) {
         Row(

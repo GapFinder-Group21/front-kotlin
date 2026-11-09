@@ -227,7 +227,7 @@ fun HangoutDetailPage(hangoutId: Int) {
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .background(Color.White, proposalShape)
+                            .background(Palette.White, proposalShape)
                             .border(1.5.dp, Palette.Ink.fade(0.08f), proposalShape)
                             .padding(16.dp)
                     ) {
@@ -304,7 +304,7 @@ private fun HostCard(table: Hangout) {
         Modifier
             .fillMaxWidth()
             .shadow(10.dp, shape, ambientColor = Palette.Ink.fade(0.03f), spotColor = Palette.Ink.fade(0.03f))
-            .background(Color.White, shape)
+            .background(Palette.White, shape)
             .border(1.dp, Palette.Ink.fade(0.08f), shape)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -334,7 +334,7 @@ private fun PastimeCard(table: Hangout) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White, shape)
+            .background(Palette.White, shape)
             .border(1.5.dp, Palette.Teal.fade(0.15f), shape)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -379,7 +379,7 @@ private fun RowScope.FactTile(icon: ImageVector, label: String, value: String) {
     Column(
         Modifier
             .weight(1f)
-            .background(Color.White, shape)
+            .background(Palette.White, shape)
             .border(1.dp, Palette.Ink.fade(0.06f), shape)
             .padding(12.dp)
     ) {

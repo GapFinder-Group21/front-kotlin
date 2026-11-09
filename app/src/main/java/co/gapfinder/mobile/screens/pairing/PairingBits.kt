@@ -18,6 +18,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,10 +41,10 @@ import coil.compose.AsyncImage
 // Piezas compartidas por las pantallas de match.
 
 /** Fondo por defecto de un Scaffold de Flutter sin color. */
-internal val BareScaffoldTone = Color(0xFFFEF7FF)
+internal val BareScaffoldTone: Color @Composable get() = MaterialTheme.colorScheme.background
 
 /** Color de texto por defecto del tema (onSurface). */
-internal val ThemeOnSurface = Color(0xFF1D1B20)
+internal val ThemeOnSurface: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 
 private val EvenLeading = LineHeightStyle(
     alignment = LineHeightStyle.Alignment.Center,

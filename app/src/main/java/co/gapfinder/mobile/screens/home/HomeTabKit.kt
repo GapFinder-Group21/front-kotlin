@@ -1,6 +1,7 @@
 package co.gapfinder.mobile.screens.home
 
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,7 +13,7 @@ import androidx.compose.ui.graphics.Color
 // Utilidades compartidas por las pestañas del home.
 
 /** Color de texto por defecto de Flutter M3 (onSurface) cuando el estilo no fija color. */
-internal val InheritedInk = Color(0xFF1D1B20)
+internal val InheritedInk: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 
 /** Estado de una carga asíncrona (equivalente a lo que pinta un FutureBuilder). */
 internal sealed interface Fetch<out T> {
