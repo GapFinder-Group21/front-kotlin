@@ -76,4 +76,6 @@ dependencies {
 
     // Cola de acciones pendientes: reenvía lo que se hizo sin red cuando vuelve la conexión
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+
+    testImplementation("junit:junit:4.13.2")
 }

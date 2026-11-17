@@ -16,6 +16,7 @@ import androidx.compose.ui.layout.layout
 import co.gapfinder.mobile.screens.hangouts.HangoutComposerPage
 import co.gapfinder.mobile.screens.hangouts.HangoutDetailPage
 import co.gapfinder.mobile.screens.hangouts.MyHangoutsPage
+import co.gapfinder.mobile.screens.pairing.MyMatchesPage
 import co.gapfinder.mobile.screens.home.HomeShell
 import co.gapfinder.mobile.screens.home.TimetableTab
 import co.gapfinder.mobile.screens.home.WindowDetailPage
@@ -110,6 +111,7 @@ private fun Render(destination: Destination) {
         Destination.HangoutComposer -> HangoutComposerPage()
         Destination.MyHangouts -> MyHangoutsPage()
         is Destination.HangoutDetail -> HangoutDetailPage(destination.hangoutId)
+        Destination.MyMatches -> MyMatchesPage()
         is Destination.WindowDetail -> WindowDetailPage(destination.windowId)
         is Destination.Unmapped -> Unit
     }
