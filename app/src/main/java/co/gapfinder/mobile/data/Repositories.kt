@@ -17,6 +17,7 @@ import co.gapfinder.mobile.domain.HangoutAttendee
 import co.gapfinder.mobile.domain.HangoutDropOff
 import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.Lecture
+import co.gapfinder.mobile.domain.MatchHistoryItem
 import co.gapfinder.mobile.domain.LocationPing
 import co.gapfinder.mobile.domain.LoginTicket
 import co.gapfinder.mobile.domain.Member
@@ -188,6 +189,8 @@ object MemberRepository {
 object Caches {
     private const val DAY = 24L * 60 * 60 * 1000
     private const val RECOMMENDATIONS_TTL = 5L * 60 * 1000
+    const val MATCH_HISTORY_LIVE_TTL = 60L * 1000
+    const val MATCH_HISTORY_IDLE_TTL = 10L * 60 * 1000
     const val ALL = "all"
 
     // Los edificios casi no cambian
@@ -195,8 +198,11 @@ object Caches {
     val hobbies = TtlCache<String, List<Hobby>>(maxEntries = 1, ttlMillis = DAY)
     // Una entrada por usuario
     val recommendations = TtlCache<Int, Recommendation>(maxEntries = 4, ttlMillis = RECOMMENDATIONS_TTL)
+    // Historial de matches, una entrada por usuario. Cuánto dura lo decide cada entrada (ver MatchHistoryRepository)
+    val matchHistory = TtlCache<Int, List<MatchHistoryItem>>(maxEntries = 4, ttlMillis = MATCH_HISTORY_IDLE_TTL)
 
     fun clear() {
+        matchHistory.clear()
         spots.clear()
         hobbies.clear()
         recommendations.clear()
@@ -656,6 +662,43 @@ object DropOffRepository {
     suspend fun stats(since: LocalDateTime): List<DropOffStat> =
         HttpGateway.fetch("/open-table-abandonments/stats?since=${encodeParam(Chrono.writeMoment(since))}")
             .expect(200, "Error getting abandonment stats").many(DropOffStat::decode)
+}
+
+// ============================================================ Mis matches
+
+object MatchHistoryRepository {
+    /** GET /matches/user/{userId}/history — todos mis matches, del más nuevo al más viejo. */
+    suspend fun fetch(memberId: Int): List<MatchHistoryItem> =
+        HttpGateway.fetch("/matches/user/$memberId/history")
+            .expectOrExplain(200, "Error getting your matches").many(MatchHistoryItem::decode)
+
+    /**
+     * Primero el caché. Con un match ACCEPTED en curso puede terminar en cualquier momento, así que
+     * dura 1 min; si no hay ninguno, 10 min. La entrada guarda su propio tiempo de vida.
+     */
+    fun cached(memberId: Int): List<MatchHistoryItem>? = Caches.matchHistory.fresh(memberId)
+
+    fun remember(memberId: Int, items: List<MatchHistoryItem>) {
+        val live = items.any { it.state == PairingState.Live }
+        Caches.matchHistory.put(
+            memberId,
+            items,
+            ttl = if (live) Caches.MATCH_HISTORY_LIVE_TTL else Caches.MATCH_HISTORY_IDLE_TTL,
+        )
+    }
+
+    /** Después de calificar, lo guardado ya no es cierto: se vacía para volver a pedirlo. */
+    fun forget() = Caches.matchHistory.clear()
+
+    /** POST /matches/{matchId}/ratings {stars, comment} → 201. Quien califica es el usuario con sesión. */
+    suspend fun rate(matchId: Int, stars: Int, comment: String?) {
+        HttpGateway.send(ratingPath(matchId), ratingBody(stars, comment)).expectOrExplain(201, "Error sending your rating")
+    }
+
+    /** Ruta y cuerpo del POST; también los usa la cola de acciones. */
+    fun ratingPath(matchId: Int): String = "/matches/$matchId/ratings"
+
+    fun ratingBody(stars: Int, comment: String?): JSONObject = jsonOf("stars" to stars, "comment" to comment)
 }
 
 // ============================================================ Recomendaciones

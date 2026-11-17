@@ -14,7 +14,7 @@ class TtlCache<K : Any, V : Any>(
     private val ttlMillis: Long,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) {
-    private class Entry<V>(val value: V, val storedAtClock: Long, val storedAt: LocalDateTime)
+    private class Entry<V>(val value: V, val storedAtClock: Long, val storedAt: LocalDateTime, val ttlMillis: Long)
 
     private val entries = object : LruCache<K, Entry<V>>(maxEntries) {}
 
@@ -22,16 +22,17 @@ class TtlCache<K : Any, V : Any>(
     @Synchronized
     fun fresh(key: K): V? {
         val entry = entries.get(key) ?: return null
-        if (clock() - entry.storedAtClock >= ttlMillis) {
+        if (clock() - entry.storedAtClock >= entry.ttlMillis) {
             entries.remove(key)
             return null
         }
         return entry.value
     }
 
+    /** [ttl] solo si esta entrada debe durar distinto al tiempo de vida general del caché. */
     @Synchronized
-    fun put(key: K, value: V) {
-        entries.put(key, Entry(value, clock(), LocalDateTime.now()))
+    fun put(key: K, value: V, ttl: Long = ttlMillis) {
+        entries.put(key, Entry(value, clock(), LocalDateTime.now(), ttl))
     }
 
     /** Cuándo se guardó la entrada (para "Last updated"), o null si no hay. */

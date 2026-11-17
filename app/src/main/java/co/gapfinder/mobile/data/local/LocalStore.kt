@@ -8,8 +8,11 @@ import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.domain.Hobby
 import co.gapfinder.mobile.domain.Lecture
+import co.gapfinder.mobile.domain.MatchHistoryItem
+import co.gapfinder.mobile.domain.MatchRating
 import co.gapfinder.mobile.domain.Member
 import co.gapfinder.mobile.domain.Pastime
+import co.gapfinder.mobile.domain.PairingState
 import co.gapfinder.mobile.domain.Weekday
 import co.gapfinder.mobile.foundation.mapNodes
 import co.gapfinder.mobile.foundation.toJsonArray
@@ -32,6 +35,9 @@ data class SavedBoard(val listings: List<Hangout>, val joinedIds: Set<Int>, val 
 
 /** Una mesa guardada, si el usuario ya está en ella y cuándo se bajó del backend. */
 data class SavedHangout(val hangout: Hangout, val joined: Boolean, val savedAt: LocalDateTime)
+
+/** Historial de matches guardado en el teléfono y el momento en que se bajó del backend. */
+data class SavedMatchHistory(val items: List<MatchHistoryItem>, val savedAt: LocalDateTime)
 
 /** Catálogo guardado y el momento en que se bajó del backend. */
 data class SavedCatalog<T>(val items: List<T>, val savedAt: LocalDateTime)
@@ -116,6 +122,52 @@ object LocalStore {
         db.myHangouts().byId(memberId, id)?.let {
             SavedHangout(it.toHangout(), joined = it.role != HangoutRole.BOARD || it.joined, savedAt = it.savedAt)
         }
+
+    // ============================================================ Mis matches
+
+    /** Historial de matches guardado del usuario, o null si nunca se guardó. */
+    suspend fun matchHistoryOf(memberId: Int): SavedMatchHistory? {
+        val dao = db.matchHistory()
+        val savedAt = dao.lastSavedAt(memberId) ?: return null
+        return SavedMatchHistory(dao.listOf(memberId).map { it.toItem() }, savedAt)
+    }
+
+    suspend fun saveMatchHistory(memberId: Int, items: List<MatchHistoryItem>) {
+        val now = LocalDateTime.now()
+        db.matchHistory().replace(memberId, items.map { it.toEntity(memberId, now) })
+    }
+
+    /** Calificaciones hechas sin red que siguen en la cola, por id de match. */
+    suspend fun pendingRatingsOf(memberId: Int): Map<Int, MatchRating> =
+        db.matchHistory().pendingOf(memberId).associate { it.matchId to MatchRating(it.myStars ?: 0, it.myComment, it.myRatedAt) }
+
+    /** Muestra la calificación de inmediato (optimista) y bloquea volver a calificar mientras se envía. */
+    suspend fun markRatingPending(memberId: Int, matchId: Int, stars: Int, comment: String?) {
+        val dao = db.matchHistory()
+        val row = dao.byId(memberId, matchId) ?: return
+        dao.put(
+            row.copy(
+                myStars = stars,
+                myComment = comment,
+                myRatedAt = LocalDateTime.now(),
+                canRate = false,
+                ratingPending = true,
+            )
+        )
+    }
+
+    /**
+     * La calificación salió de la cola. Si se envió (o el backend dijo que ya existía) queda como está,
+     * sin la marca de pendiente; si fue rechazada vuelve a "por calificar".
+     */
+    suspend fun settleRating(memberId: Int, matchId: Int, accepted: Boolean) {
+        val dao = db.matchHistory()
+        val row = dao.byId(memberId, matchId) ?: return
+        dao.put(
+            if (accepted) row.copy(ratingPending = false)
+            else row.copy(myStars = null, myComment = null, myRatedAt = null, canRate = true, ratingPending = false)
+        )
+    }
 
     // ============================================================ Catálogos
 
@@ -221,6 +273,49 @@ private fun Hangout.toEntity(memberId: Int, role: HangoutRole, savedAt: LocalDat
     spotName = spot?.name,
     photoUrl = photoUrl,
     savedAt = savedAt,
+)
+
+private fun MatchHistoryItem.toEntity(memberId: Int, savedAt: LocalDateTime) = MatchHistoryEntity(
+    memberId = memberId,
+    matchId = matchId,
+    status = state.wire,
+    startsAt = startsAt,
+    endsAt = endsAt,
+    score = score,
+    otherId = other.id,
+    otherName = other.name,
+    otherCareer = other.career,
+    otherSemester = other.semester,
+    otherAvatarUrl = other.avatarUrl,
+    myStars = myRating?.stars,
+    myComment = myRating?.comment,
+    myRatedAt = myRating?.ratedAt,
+    theirStars = otherRating?.stars,
+    theirComment = otherRating?.comment,
+    theirRatedAt = otherRating?.ratedAt,
+    canRate = canRate,
+    ratingPending = ratingPending,
+    savedAt = savedAt,
+)
+
+private fun MatchHistoryEntity.toItem() = MatchHistoryItem(
+    matchId = matchId,
+    state = PairingState.parse(status),
+    startsAt = startsAt,
+    endsAt = endsAt,
+    score = score,
+    other = Member(
+        id = otherId,
+        name = otherName,
+        email = "",
+        career = otherCareer,
+        semester = otherSemester,
+        avatarUrl = otherAvatarUrl,
+    ),
+    myRating = myStars?.let { MatchRating(it, myComment, myRatedAt) },
+    otherRating = theirStars?.let { MatchRating(it, theirComment, theirRatedAt) },
+    canRate = canRate,
+    ratingPending = ratingPending,
 )
 
 /** Arma la mesa con lo guardado; los datos del creador y del edificio que no se guardan quedan vacíos. */

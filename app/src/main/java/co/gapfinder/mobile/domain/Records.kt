@@ -324,6 +324,57 @@ data class Pairing(
     }
 }
 
+/** Calificación que un estudiante le da a un match terminado: de 1 a 5 estrellas y un comentario opcional. */
+data class MatchRating(
+    val stars: Int,
+    val comment: String? = null,
+    val ratedAt: LocalDateTime? = null,
+) {
+    companion object {
+        const val MIN_STARS = 1
+        const val MAX_STARS = 5
+        const val MAX_COMMENT = 300
+
+        fun decode(j: JSONObject): MatchRating = MatchRating(
+            stars = j.intOr("stars"),
+            comment = j.textOrNull("comment")?.takeIf { it.isNotBlank() },
+            ratedAt = j.textOrNull("createdAt")?.let(Chrono::readMoment),
+        )
+    }
+}
+
+/**
+ * Un match de "My matches", visto por uno de sus dos estudiantes (MatchHistoryItemDTO).
+ * [otherRating] no llega hasta que yo califico, aunque la otra persona ya lo haya hecho.
+ * [ratingPending] es solo local: calificó sin red y la calificación sigue en la cola.
+ */
+data class MatchHistoryItem(
+    val matchId: Int,
+    val state: PairingState,
+    val startsAt: LocalDateTime,
+    val endsAt: LocalDateTime,
+    val score: Double? = null,
+    val other: Member,
+    val myRating: MatchRating? = null,
+    val otherRating: MatchRating? = null,
+    val canRate: Boolean = false,
+    val ratingPending: Boolean = false,
+) {
+    companion object {
+        fun decode(j: JSONObject): MatchHistoryItem = MatchHistoryItem(
+            matchId = j.intOr("matchId"),
+            state = PairingState.parse(j.textOrNull("status")),
+            startsAt = Chrono.readMoment(j.getString("startTime")),
+            endsAt = Chrono.readMoment(j.getString("endTime")),
+            score = j.decimalOrNull("score"),
+            other = Member.decode(j.getJSONObject("otherUser")),
+            myRating = j.nodeOrNull("myRating")?.let(MatchRating::decode),
+            otherRating = j.nodeOrNull("otherRating")?.let(MatchRating::decode),
+            canRate = j.flagOr("canRate"),
+        )
+    }
+}
+
 /** Candidato devuelto por /matches/gap/{gapId}/candidates (antes MatchCandidate). */
 data class PairingProspect(
     /** Hueco de quien busca. */
