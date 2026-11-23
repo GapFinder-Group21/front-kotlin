@@ -1,5 +1,6 @@
 package co.gapfinder.mobile.ui.nav
 
+import co.gapfinder.mobile.foundation.SessionVault
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +52,9 @@ private fun Modifier.keepAlive(visible: Boolean) = layout { measurable, constrai
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppStage() {
-    StackNavigator.start(Destination.Landing)
+    // Con una sesión guardada se entra directo al inicio. Si el refresh token ya venció, HttpGateway borra la sesión
+    // y vuelve a Landing, así que no hace falta validarlo aquí.
+    StackNavigator.start(if (SessionVault.memberIdNow() != null) Destination.Home else Destination.Landing)
     val stack = StackNavigator.entries
     val banner = rememberBannerMode()
 
