@@ -379,7 +379,8 @@ private fun MatchCard(item: MatchHistoryItem, onRate: (MatchHistoryItem) -> Unit
                         style = Typo.paragraph(FontWeight.SemiBold).copy(fontSize = 13.sp, color = Palette.Ink.fade(0.7f)),
                         modifier = Modifier.weight(1f),
                     )
-                    PillButton(label = "Rate", onClick = { onRate(item) }, compact = true)
+                    // PillButton siempre ocupa todo el ancho: sin un ancho fijo dejaba el texto de al lado en 0 de ancho
+                    PillButton(label = "Rate", onClick = { onRate(item) }, compact = true, modifier = Modifier.width(110.dp))
                 }
             }
 
