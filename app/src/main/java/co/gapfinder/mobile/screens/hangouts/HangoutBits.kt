@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,7 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import android.content.Context
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import co.gapfinder.mobile.foundation.ServerEnv
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -35,6 +40,7 @@ import co.gapfinder.mobile.domain.Hangout
 import co.gapfinder.mobile.domain.HangoutState
 import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.theme.Palette
+import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import java.time.Duration
@@ -65,20 +71,47 @@ internal fun Hangout.isOngoing(): Boolean =
     (state == HangoutState.Open || state == HangoutState.Full) && endsAt.isAfter(LocalDateTime.now())
 
 /** Minutos que le quedan a la mesa. */
-/** Foto de la mesa. Coil la guarda en disco, así que se ve también sin red si ya se había abierto. */
+private fun photoLink(path: String) = if (path.startsWith("http")) path else ServerEnv.BASE_URL + path
+
+/**
+ * Foto de la mesa. Coil la guarda en disco (GapFinderApplication) y [prefetchPhotos] la baja cuando llega la lista,
+ * así se ve también sin red. Si aun así no está, queda el recuadro con la cámara en vez de un hueco.
+ */
 @Composable
 internal fun HangoutPhoto(table: Hangout, modifier: Modifier = Modifier) {
     val path = table.photoUrl ?: return
-    val url = if (path.startsWith("http")) path else ServerEnv.BASE_URL + path
-    AsyncImage(
-        model = url,
-        contentDescription = "Photo of ${table.title}",
-        contentScale = ContentScale.Crop,
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(180.dp)
-            .clip(RoundedCornerShape(16.dp)),
-    )
+            .clip(RoundedCornerShape(16.dp))
+            .background(Palette.Ink.fade(0.06f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Glyphs.photoCameraRounded, contentDescription = null, tint = Palette.Ink.fade(0.3f), modifier = Modifier.size(36.dp))
+        AsyncImage(
+            model = photoLink(path),
+            contentDescription = "Photo of ${table.title}",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/**
+ * Estrategia: caching. Baja a disco las fotos de las mesas apenas llega la lista, sin decodificarlas en memoria,
+ * para que las mesas que el usuario todavía no abrió también tengan foto sin red.
+ */
+internal fun prefetchPhotos(context: Context, tables: List<Hangout>) {
+    val loader = context.imageLoader
+    tables.mapNotNull { it.photoUrl }.distinct().forEach { path ->
+        loader.enqueue(
+            ImageRequest.Builder(context)
+                .data(photoLink(path))
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .build(),
+        )
+    }
 }
 
 internal fun Hangout.minutesLeft(): Long = Duration.between(LocalDateTime.now(), endsAt).toMinutes()

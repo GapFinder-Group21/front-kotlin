@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,6 +85,7 @@ fun HangoutMapTab() {
     // Fecha de lo guardado en Room cuando eso es lo que se está mostrando (null si viene de la red)
     var savedAt by remember { mutableStateOf<LocalDateTime?>(null) }
     val online by rememberOnline()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     suspend fun refreshBoard() {
@@ -123,6 +125,7 @@ fun HangoutMapTab() {
                 val checks = coroutineScope { open.map { table -> async { attendsQuietly(table.id, me) } }.awaitAll() }
                 val joined = open.filterIndexed { index, _ -> checks[index] }.map { it.id }.toSet()
                 LocalStore.saveBoard(me, open, joined)
+                prefetchPhotos(context, open)
                 listings = open
                 joinedIds = joined
                 savedAt = null

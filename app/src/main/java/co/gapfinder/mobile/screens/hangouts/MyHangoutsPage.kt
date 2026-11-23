@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +83,7 @@ fun MyHangoutsPage() {
     // Fecha de lo guardado en Room cuando eso es lo que se está mostrando (null si viene de la red)
     var savedAt by remember { mutableStateOf<LocalDateTime?>(null) }
     val online by rememberOnline()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     suspend fun pullEverything() {
@@ -114,6 +116,7 @@ fun MyHangoutsPage() {
             val checks = coroutineScope { others.map { table -> async { attends(table.id, me) } }.awaitAll() }
             val joined = others.filterIndexed { index, _ -> checks[index] }
             LocalStore.saveMyHangouts(me, mine, joined)
+            prefetchPhotos(context, mine + joined)
             hosted = mine
             attended = joined
             savedAt = null
