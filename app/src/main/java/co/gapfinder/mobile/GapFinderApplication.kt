@@ -29,5 +29,8 @@ class GapFinderApplication : Application(), ImageLoaderFactory {
                     .maxSizeBytes(50L * 1024 * 1024)
                     .build()
             }
+            // El servidor manda Cache-Control: no-store en las fotos (Spring Security). Coil lo respeta y entonces no
+            // las guarda en disco, y sin red no había foto. Se ignora el encabezado: una foto de mesa no cambia.
+            .respectCacheHeaders(false)
             .build()
 }
