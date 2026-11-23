@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.rounded.TableBar
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -84,6 +85,7 @@ object Glyphs {
     val accessTimeFilledRounded: ImageVector = Icons.Rounded.AccessTimeFilled
     val unfoldMoreRounded: ImageVector = Icons.Rounded.UnfoldMore
     val starRounded: ImageVector = Icons.Rounded.Star
+    val starOutlineRounded: ImageVector = Icons.Rounded.StarOutline
     val phone: ImageVector = Icons.Filled.Phone
     val selfImprovementRounded: ImageVector = Icons.Rounded.SelfImprovement
     val rocketLaunchRounded: ImageVector = Icons.Rounded.RocketLaunch

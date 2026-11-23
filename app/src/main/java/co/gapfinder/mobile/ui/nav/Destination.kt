@@ -62,6 +62,9 @@ sealed interface Destination {
     /** '/open-table-detail' */
     data class HangoutDetail(val hangoutId: Int) : Destination
 
+    /** '/my-matches' */
+    data object MyMatches : Destination
+
     /** '/gap-detail' */
     data class WindowDetail(val windowId: Int) : Destination
 

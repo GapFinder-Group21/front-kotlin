@@ -45,6 +45,7 @@ import co.gapfinder.mobile.foundation.Chrono
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.ui.kit.FocusSelector
 import co.gapfinder.mobile.ui.kit.Glyphs
+import co.gapfinder.mobile.ui.kit.inkTap
 import co.gapfinder.mobile.ui.kit.PulseMatchButton
 import co.gapfinder.mobile.ui.nav.Destination
 import co.gapfinder.mobile.ui.nav.StackNavigator
@@ -136,18 +137,35 @@ fun PairingTab(isActive: Boolean) {
             .background(Palette.Fog)
             .statusBarsPadding()
     ) {
-        Text(
-            text = "MATCH",
-            style = Typo.heading(FontWeight.Black).copy(
-                fontSize = 20.sp,
-                color = Palette.White,
-                letterSpacing = 1.5.sp,
-            ),
-            modifier = Modifier
+        Row(
+            Modifier
                 .fillMaxWidth()
                 .background(Palette.Ink)
                 .padding(horizontal = 20.dp, vertical = 14.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "MATCH",
+                style = Typo.heading(FontWeight.Black).copy(
+                    fontSize = 20.sp,
+                    color = Palette.White,
+                    letterSpacing = 1.5.sp,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            // Entrada a "My matches": historial y calificaciones
+            Row(
+                Modifier
+                    .background(Palette.White.fade(0.12f), RoundedCornerShape(20.dp))
+                    .inkTap(RoundedCornerShape(20.dp)) { StackNavigator.go(Destination.MyMatches) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Glyphs.historyRounded, contentDescription = null, tint = Palette.White, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("My matches", style = Typo.paragraph(FontWeight.ExtraBold).copy(fontSize = 12.sp, color = Palette.White))
+            }
+        }
 
         PullToRefreshBox(
             isRefreshing = false,

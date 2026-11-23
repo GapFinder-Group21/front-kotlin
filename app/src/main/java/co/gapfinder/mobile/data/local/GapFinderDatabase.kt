@@ -20,10 +20,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HangoutDraftEntity::class,
         PendingActionEntity::class,
         CatalogEntity::class,
+        MatchHistoryEntity::class,
     ],
     // 2: tabla pending_actions (cola de acciones sin red)
     // 3: tabla catalogs y mesas del mapa (rol BOARD) en my_hangouts
-    version = 4,
+    // 4: photoUrl en my_hangouts
+    // 5: tabla match_history (Mis matches)
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(RoomConverters::class)
@@ -38,6 +41,8 @@ abstract class GapFinderDatabase : RoomDatabase() {
 
     abstract fun catalogs(): CatalogDao
 
+    abstract fun matchHistory(): MatchHistoryDao
+
     companion object {
         private const val FILE = "gapfinder.db"
 
@@ -48,13 +53,28 @@ abstract class GapFinderDatabase : RoomDatabase() {
             }
         }
 
+        /** Versión 5: tabla del historial de matches. Solo se agrega, así la cola de pendientes se conserva. */
+        private val ADD_MATCH_HISTORY = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `match_history` (`memberId` INTEGER NOT NULL, `matchId` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `startsAt` TEXT NOT NULL, `endsAt` TEXT NOT NULL, `score` REAL, " +
+                        "`otherId` INTEGER NOT NULL, `otherName` TEXT NOT NULL, `otherCareer` TEXT NOT NULL, " +
+                        "`otherSemester` INTEGER NOT NULL, `otherAvatarUrl` TEXT, `myStars` INTEGER, `myComment` TEXT, " +
+                        "`myRatedAt` TEXT, `theirStars` INTEGER, `theirComment` TEXT, `theirRatedAt` TEXT, " +
+                        "`canRate` INTEGER NOT NULL, `ratingPending` INTEGER NOT NULL, `savedAt` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`memberId`, `matchId`))"
+                )
+            }
+        }
+
         @Volatile
         private var instance: GapFinderDatabase? = null
 
         fun get(context: Context): GapFinderDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(context.applicationContext, GapFinderDatabase::class.java, FILE)
-                    .addMigrations(ADD_PHOTO_URL)
+                    .addMigrations(ADD_PHOTO_URL, ADD_MATCH_HISTORY)
                     // Casi todo es una copia del backend que se vuelve a bajar; lo único que se pierde
                     // si cambia el esquema es un borrador del wizard sin publicar
                     .fallbackToDestructiveMigration(dropAllTables = true)
