@@ -39,6 +39,12 @@ class TtlCache<K : Any, V : Any>(
     @Synchronized
     fun storedAt(key: K): LocalDateTime? = entries.get(key)?.storedAt
 
+    /** Saca una sola entrada (por ejemplo, el chat de un amigo cuando la cola mandó un mensaje). */
+    @Synchronized
+    fun remove(key: K) {
+        entries.remove(key)
+    }
+
     @Synchronized
     fun clear() {
         entries.evictAll()

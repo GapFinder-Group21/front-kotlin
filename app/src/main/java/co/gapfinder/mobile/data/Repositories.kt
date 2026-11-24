@@ -8,6 +8,7 @@ import co.gapfinder.mobile.domain.Bond
 import co.gapfinder.mobile.domain.BondState
 import co.gapfinder.mobile.domain.CampusSpot
 import co.gapfinder.mobile.domain.ChatLine
+import co.gapfinder.mobile.domain.ChatMessage
 import co.gapfinder.mobile.domain.Crew
 import co.gapfinder.mobile.domain.DropOffStat
 import co.gapfinder.mobile.domain.EnergyLevel
@@ -191,6 +192,7 @@ object Caches {
     private const val RECOMMENDATIONS_TTL = 5L * 60 * 1000
     const val MATCH_HISTORY_LIVE_TTL = 60L * 1000
     const val MATCH_HISTORY_IDLE_TTL = 10L * 60 * 1000
+    private const val CHAT_TTL = 5L * 60 * 1000
     const val ALL = "all"
 
     // Los edificios casi no cambian
@@ -199,9 +201,13 @@ object Caches {
     // Una entrada por usuario
     val recommendations = TtlCache<Int, Recommendation>(maxEntries = 4, ttlMillis = RECOMMENDATIONS_TTL)
     // Historial de matches, una entrada por usuario. Cuánto dura lo decide cada entrada (ver MatchHistoryRepository)
-    val matchHistory = TtlCache<Int, List<MatchHistoryItem>>(maxEntries = 4, ttlMillis = MATCH_HISTORY_IDLE_TTL)
+    val matchHistory = TtlCache<Int, List<MatchHistoryItem>>(maxEntries = 4, ttlMillis = MATCH_HISTORY_IDLE_TTL)  // Estrategia: caching. Chats con amigos, una entrada por amigo (friendId): 10 chats y 5 min.
+    // Reabrir un chat se ve al instante, sin leer Room ni ir a la red
+    val chats = TtlCache<Int, List<ChatMessage>>(maxEntries = 10, ttlMillis = CHAT_TTL)
 
     fun clear() {
+        
+        chats.clear()
         matchHistory.clear()
         spots.clear()
         hobbies.clear()
@@ -700,6 +706,33 @@ object MatchHistoryRepository {
 
     fun ratingBody(stars: Int, comment: String?): JSONObject = jsonOf("stars" to stars, "comment" to comment)
 }
+
+// ============================================================ Chat con amigos
+
+object ChatRepository {
+    /** El backend devuelve como máximo 50 mensajes por GET. */
+    const val PAGE_SIZE = 50
+
+    /**
+     * GET /chats/user/{userId}/with/{friendId}?afterId= — mensajes con id mayor a [afterId],
+     * del más viejo al más nuevo (máximo [PAGE_SIZE]). Devuelve el JSON crudo: se parsea en
+     * Dispatchers.Default junto con la unión a lo guardado (ver processChatPage).
+     */
+    suspend fun fetchAfter(memberId: Int, friendId: Int, afterId: Int): String =
+        HttpGateway.fetch("/chats/user/$memberId/with/$friendId?afterId=$afterId")
+            .expectOrExplain(200, "Error getting the chat").text
+
+    /**
+     * POST /chats/messages {receiverId, content, clientId} — quien manda es el usuario con sesión.
+     * Devuelve la respuesta cruda porque 409 también cuenta como enviado; lo decide ChatCouriers.post.
+     */
+    suspend fun send(receiverId: Int, content: String, clientId: String): Reply =
+        HttpGateway.send(
+            "/chats/messages",
+            jsonOf("receiverId" to receiverId, "content" to content, "clientId" to clientId),
+        )
+}
+
 
 // ============================================================ Recomendaciones
 

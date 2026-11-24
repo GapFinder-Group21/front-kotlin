@@ -65,6 +65,9 @@ sealed interface Destination {
     /** '/my-matches' */
     data object MyMatches : Destination
 
+    /** '/chat' — conversación con un amigo (se abre tocando su card en Friends). */
+    data class Chat(val friend: Member) : Destination
+    
     /** '/gap-detail' */
     data class WindowDetail(val windowId: Int) : Destination
 

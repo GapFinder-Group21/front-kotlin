@@ -23,6 +23,8 @@ import org.json.JSONObject
 import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
+import co.gapfinder.mobile.domain.ChatMessage
+import co.gapfinder.mobile.domain.ChatStatus
 
 /** Horario guardado en el teléfono. */
 data class SavedTimetable(val lectures: List<Lecture>, val windows: List<FreeWindow>)
@@ -168,6 +170,44 @@ object LocalStore {
             else row.copy(myStars = null, myComment = null, myRatedAt = null, canRate = true, ratingPending = false)
         )
     }
+
+        // ============================================================ Chat con amigos
+
+    /** Estrategia: local storage. Conversación guardada con ese amigo, en orden (vacía si no hay nada). */
+    suspend fun chatWith(memberId: Int, friendId: Int): List<ChatMessage> =
+        db.chatMessages().conversation(memberId, friendId).map { it.toMessage() }
+
+    /** Un mensaje guardado, o null si ya no está (por ejemplo, después de cerrar sesión). */
+    suspend fun chatMessage(clientId: String): ChatMessage? = db.chatMessages().byClientId(clientId)?.toMessage()
+
+    /** Guarda un mensaje escrito en el teléfono (queda PENDING hasta que el backend lo tenga). */
+    suspend fun saveChatMessage(memberId: Int, friendId: Int, message: ChatMessage) =
+        db.chatMessages().put(message.toEntity(memberId, friendId))
+
+    /** Guarda en una sola transacción el lote que llegó del backend. */
+    suspend fun saveChatPage(memberId: Int, friendId: Int, messages: List<ChatMessage>) =
+        db.chatMessages().saveFromServer(messages.map { it.toEntity(memberId, friendId) })
+
+    /** El backend ya lo tiene (201, o 409 porque ya estaba guardado). Devuelve el mensaje actualizado. */
+    suspend fun markChatSent(clientId: String): ChatMessage? =
+        updateChat(clientId) { it.copy(status = ChatStatus.SENT, failReason = null) }
+
+    /** Vuelve a esperar envío (botón Retry): mismo clientId, así el backend no lo duplica. */
+    suspend fun markChatPending(clientId: String): ChatMessage? =
+        updateChat(clientId) { it.copy(status = ChatStatus.PENDING, failReason = null) }
+
+    /** El backend lo rechazó. Sin [reason] se conserva el motivo que ya tenía. */
+    suspend fun markChatFailed(clientId: String, reason: String?): ChatMessage? =
+        updateChat(clientId) {
+            it.copy(status = ChatStatus.FAILED, failReason = reason ?: it.failReason ?: "Couldn't send this message")
+        }
+
+    private suspend fun updateChat(clientId: String, change: (ChatMessageEntity) -> ChatMessageEntity): ChatMessage? {
+        val dao = db.chatMessages()
+        val row = dao.byClientId(clientId) ?: return null
+        return change(row).also { dao.put(it) }.toMessage()
+    }
+
 
     // ============================================================ Catálogos
 
@@ -316,6 +356,29 @@ private fun MatchHistoryEntity.toItem() = MatchHistoryItem(
     otherRating = theirStars?.let { MatchRating(it, theirComment, theirRatedAt) },
     canRate = canRate,
     ratingPending = ratingPending,
+)
+private fun ChatMessage.toEntity(memberId: Int, friendId: Int) = ChatMessageEntity(
+    clientId = clientId,
+    serverId = serverId,
+    memberId = memberId,
+    friendId = friendId,
+    senderId = senderId,
+    content = content,
+    createdAt = createdAt,
+    status = status,
+    failReason = failReason,
+)
+
+private fun ChatMessageEntity.toMessage() = ChatMessage(
+    clientId = clientId,
+    serverId = serverId,
+    senderId = senderId,
+    // Si lo mandé yo lo recibe el amigo; si no, lo recibo yo
+    receiverId = if (senderId == memberId) friendId else memberId,
+    content = content,
+    createdAt = createdAt,
+    status = status,
+    failReason = failReason,
 )
 
 /** Arma la mesa con lo guardado; los datos del creador y del edificio que no se guardan quedan vacíos. */

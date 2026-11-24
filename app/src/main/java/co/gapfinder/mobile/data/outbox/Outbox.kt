@@ -68,6 +68,7 @@ object Outbox {
         register(TYPE_REQUEST, Courier(::deliverRequest))
         HangoutCouriers.registerAll()
         RatingCouriers.registerAll()
+        ChatCouriers.registerAll()
         // Por si quedaron acciones de antes de cerrar la app
         flush()
     }
