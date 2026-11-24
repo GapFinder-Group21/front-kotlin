@@ -52,7 +52,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import co.gapfinder.mobile.data.Caches
+import co.gapfinder.mobile.data.ChatDeliveryReport
 import co.gapfinder.mobile.data.ChatRepository
+import co.gapfinder.mobile.data.DeliveryRoute
 import co.gapfinder.mobile.data.lastServerId
 import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.data.mergeChatOffMain
@@ -178,6 +180,7 @@ private class ChatSession(val friend: Member) {
      * (si no, el mensaje quedaría PENDING sin estar en la cola).
      */
     suspend fun send(text: String) = withContext(NonCancellable) {
+        val tappedAt = System.currentTimeMillis()
         val me = SessionVault.memberId() ?: return@withContext
         val content = text.trim().take(ChatMessage.MAX_LENGTH)
         if (content.isEmpty()) return@withContext
@@ -195,7 +198,7 @@ private class ChatSession(val friend: Member) {
         if (!Connectivity.isOnline()) {
             // Estrategia: eventual connectivity (2). Sin red va directo a la cola
             change { LocalStore.saveChatMessage(me, friend.id, message); message }
-            ChatCouriers.enqueueSend(me, message)
+            ChatCouriers.enqueueSend(me, message, tappedAt)
             Toaster.show("No connection: your message will be sent when you're back online")
             return@withContext
         }
@@ -204,23 +207,30 @@ private class ChatSession(val friend: Member) {
             // Estrategia: multithreading. async: el POST sale de una vez, mientras el mensaje se guarda en Room
             // y aparece en pantalla
             val posting = async {
-                try {
+                val result = try {
                     ChatCouriers.post(friend.id, message.content, message.clientId)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Delivery.Retry(e.toString())
                 }
+                // BQ 17: la hora en que respondió el servidor, tomada aquí para no contar lo que tarde Room
+                result to System.currentTimeMillis()
             }
             change { LocalStore.saveChatMessage(me, friend.id, message); message }
 
-            when (val delivery = posting.await()) {
+            val (delivery, savedAt) = posting.await()
+            when (delivery) {
                 // 201, o 409 porque ya estaba guardado
-                Delivery.Sent -> change { LocalStore.markChatSent(message.clientId) }
+                Delivery.Sent -> {
+                    change { LocalStore.markChatSent(message.clientId) }
+                    // BQ 17: salió de una vez. El reporte va después de mostrar el ✓, así no retrasa el chat
+                    ChatDeliveryReport.report(me, message.clientId, DeliveryRoute.Direct, tappedAt, savedAt)
+                }
                 // 400 / 422: queda FAILED con el motivo y el botón Retry
                 is Delivery.Rejected -> change { LocalStore.markChatFailed(message.clientId, delivery.reason) }
                 // Estrategia: eventual connectivity (2). La red falló a mitad: a la cola, sigue con el reloj
-                is Delivery.Retry -> ChatCouriers.enqueueSend(me, message)
+                is Delivery.Retry -> ChatCouriers.enqueueSend(me, message, tappedAt)
             }
         }
     }
@@ -229,7 +239,8 @@ private class ChatSession(val friend: Member) {
     suspend fun retry(message: ChatMessage) = withContext(NonCancellable) {
         val me = SessionVault.memberId() ?: return@withContext
         change { LocalStore.markChatPending(message.clientId) }
-        ChatCouriers.enqueueSend(me, message)
+        // Un reintento cuenta desde que se tocó Retry
+        ChatCouriers.enqueueSend(me, message, tappedAt = System.currentTimeMillis())
     }
 
     /** Aplica un cambio a un mensaje: primero en Room ([write]) y luego en pantalla. */
