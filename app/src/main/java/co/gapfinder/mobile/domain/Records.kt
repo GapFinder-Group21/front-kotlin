@@ -619,3 +619,55 @@ data class Recommendation(
         )
     }
 }
+
+/** Estado de un mensaje del chat en el teléfono. Solo es local: el backend no lo conoce. */
+enum class ChatStatus {
+    /** El backend ya lo tiene (✓). */
+    SENT,
+
+    /** Escrito y esperando: se está mandando o está en la cola sin red (reloj). */
+    PENDING,
+
+    /** El backend lo rechazó, por ejemplo porque ya no son amigos (⚠ con "Retry"). */
+    FAILED,
+}
+
+/**
+ * Mensaje del chat con un amigo (ChatMessageDTO).
+ * [clientId] es un UUID que genera la app al escribirlo y es la clave del mensaje:
+ * reenviarlo con el mismo clientId no lo duplica en el backend (responde 409).
+ * [serverId] es el id del backend; queda null hasta que el mensaje llega por el GET de la conversación.
+ * [status] y [failReason] son solo locales.
+ */
+data class ChatMessage(
+    val clientId: String,
+    val serverId: Int? = null,
+    val senderId: Int,
+    val receiverId: Int,
+    val content: String,
+    val createdAt: LocalDateTime,
+    val status: ChatStatus = ChatStatus.SENT,
+    val failReason: String? = null,
+) {
+    fun isMine(memberId: Int?): Boolean = senderId == memberId
+
+    companion object {
+        /** El backend rechaza (400) los mensajes vacíos o de más de 500 caracteres. */
+        const val MAX_LENGTH = 500
+
+        /** Lo que llega del backend ya está guardado allá, así que siempre es SENT. */
+        fun decode(j: JSONObject): ChatMessage {
+            val serverId = j.intOrNull("id")
+            return ChatMessage(
+                // Por si un mensaje viejo no trae clientId: igual queda una clave única para deduplicar
+                clientId = j.textOrNull("clientId") ?: "server-$serverId",
+                serverId = serverId,
+                senderId = j.intOr("senderId"),
+                receiverId = j.intOr("receiverId"),
+                content = j.textOr("content"),
+                createdAt = Chrono.readMoment(j.getString("createdAt")),
+                status = ChatStatus.SENT,
+            )
+        }
+    }
+}

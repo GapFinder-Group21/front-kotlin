@@ -14,9 +14,12 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Lo mínimo que mis pantallas necesitan saber de la red. 
  */
-interface NetworkStatus {
-    /** true si hay una red con internet validada. */
-    val online: StateFlow<Boolean>
+interface NetworkStatus {   
+     /**
+     * Cuándo volvió la red por última vez (reloj del teléfono, epoch ms), o null si ahora no hay red o no se sabe.
+     * Lo usa la BQ 17 para separar el tiempo que el estudiante estuvo sin red del tiempo que tardó la cola.
+     */
+    val onlineSince: Long? get() = null
 }
 
 /** Punto único donde las pantallas leen el estado de la red. */
@@ -40,6 +43,8 @@ object Connectivity {
     }
 
     fun isOnline(): Boolean = online.value
+    /** Cuándo volvió la red por última vez (epoch ms), o null si no se sabe (BQ 17). */
+    fun onlineSince(): Long? = source?.onlineSince
 }
 
 /** Estado de la red como State de Compose: la pantalla se recompone cuando cambia. */

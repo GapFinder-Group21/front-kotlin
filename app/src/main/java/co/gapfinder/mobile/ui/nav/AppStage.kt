@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
+import co.gapfinder.mobile.screens.home.ChatPage
 import co.gapfinder.mobile.screens.hangouts.HangoutComposerPage
 import co.gapfinder.mobile.screens.hangouts.HangoutDetailPage
 import co.gapfinder.mobile.screens.hangouts.MyHangoutsPage
@@ -115,6 +116,7 @@ private fun Render(destination: Destination) {
         Destination.MyHangouts -> MyHangoutsPage()
         is Destination.HangoutDetail -> HangoutDetailPage(destination.hangoutId)
         Destination.MyMatches -> MyMatchesPage()
+        is Destination.Chat -> ChatPage(friend = destination.friend)     
         is Destination.WindowDetail -> WindowDetailPage(destination.windowId)
         is Destination.Unmapped -> Unit
     }
