@@ -21,6 +21,10 @@ class NetworkMonitor(context: Context) : NetworkStatus {
 
     private val state = MutableStateFlow(currentlyOnline())
     override val online: StateFlow<Boolean> = state.asStateFlow()
+    // BQ 17: cuándo volvió la red por última vez. Si la app abre con red, cuenta desde que abrió
+    @Volatile
+    private var since: Long? = if (state.value) System.currentTimeMillis() else null
+    override val onlineSince: Long? get() = since
 
     private var registered = false
 
@@ -57,6 +61,9 @@ class NetworkMonitor(context: Context) : NetworkStatus {
     private fun publish() {
         val now = validated.isNotEmpty()
         if (state.value != now) Log.d(TAG, if (now) " Online" else "Offline")
+        // BQ 17: la red volvió (pasó de false a true), desde aquí cuenta el tiempo de la cola. Sin red no hay "desde"
+        if (now && !state.value) since = System.currentTimeMillis()
+        if (!now) since = null
         state.value = now
     }
 
