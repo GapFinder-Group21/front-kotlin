@@ -43,6 +43,8 @@ object Connectivity {
     }
 
     fun isOnline(): Boolean = online.value
+    /** Cuándo volvió la red por última vez (epoch ms), o null si no se sabe (BQ 17). */
+    fun onlineSince(): Long? = source?.onlineSince
 }
 
 /** Estado de la red como State de Compose: la pantalla se recompone cuando cambia. */
