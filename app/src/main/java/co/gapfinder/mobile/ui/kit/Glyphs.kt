@@ -2,6 +2,10 @@
 
 package co.gapfinder.mobile.ui.kit
 
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AddCircleOutline
@@ -110,4 +114,8 @@ object Glyphs {
     val addCircleOutline: ImageVector = Icons.Filled.AddCircleOutline
     val photoCameraRounded: ImageVector = Icons.Rounded.PhotoCamera
     val photoLibraryRounded: ImageVector = Icons.Rounded.PhotoLibrary
+    val chatBubbleOutlineRounded: ImageVector = Icons.Rounded.ChatBubbleOutline
+    val sendRounded: ImageVector = Icons.AutoMirrored.Rounded.Send
+    val scheduleRounded: ImageVector = Icons.Rounded.Schedule
+    val warningAmberRounded: ImageVector = Icons.Rounded.WarningAmber
 }
