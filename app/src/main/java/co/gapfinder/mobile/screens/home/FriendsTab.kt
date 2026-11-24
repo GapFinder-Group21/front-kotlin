@@ -701,7 +701,7 @@ private fun FreeBuddyCard(buddy: FreeBuddy, onOpen: (Member) -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttendingGrid(people: List<Member>) {
+private fun AttendingGrid(people: List<Member>, onOpen: (Member) -> Unit) {
     val density = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // 3 columnas: (ancho - 2 espacios de 12) / 3, calculado en px para que quepan exactas
@@ -714,32 +714,48 @@ private fun AttendingGrid(people: List<Member>) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             people.forEach { person ->
-                Column(
+                Box(
                     Modifier
                         .width(cellWidth)
                         .alpha(0.7f)
                         .background(Palette.White, cardShape)
                         .border(1.dp, Palette.Ink.fade(0.08f), cardShape)
-                        .padding(vertical = 13.dp, horizontal = 9.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .inkTap(cardShape) { onOpen(person) }
                 ) {
-                    FaceBubble(
-                        url = person.avatarUrl,
-                        diameter = 36.dp,
-                        ring = Palette.Ink.fade(0.1f),
-                        ringWidth = 1.5.dp,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = person.name.split(" ").first(),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 11.sp, color = Palette.Ink),
-                    )
-                    Text(
-                        text = "In class",
-                        style = Typo.paragraph().copy(fontSize = 10.sp, color = Palette.Ink.fade(0.4f)),
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 13.dp, horizontal = 9.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        FaceBubble(
+                            url = person.avatarUrl,
+                            diameter = 36.dp,
+                            ring = Palette.Ink.fade(0.1f),
+                            ringWidth = 1.5.dp,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = person.name.split(" ").first(),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 11.sp, color = Palette.Ink),
+                        )
+                        Text(
+                            text = "In class",
+                            style = Typo.paragraph().copy(fontSize = 10.sp, color = Palette.Ink.fade(0.4f)),
+                        )
+                    }
+                    // Pista de que la card abre el chat
+                    Icon(
+                        imageVector = Glyphs.chatBubbleOutlineRounded,
+                        contentDescription = "Open chat",
+                        tint = Palette.Coral,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(14.dp),
                     )
                 }
             }
