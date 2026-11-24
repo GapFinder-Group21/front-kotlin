@@ -4,11 +4,15 @@ import co.gapfinder.mobile.data.Caches
 import co.gapfinder.mobile.data.ChatRepository
 import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.domain.ChatMessage
+import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.jsonOf
 import co.gapfinder.mobile.ui.nav.Toaster
 import co.gapfinder.mobile.ui.theme.Palette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import co.gapfinder.mobile.data.ChatDeliveryReport
+import co.gapfinder.mobile.data.DeliveryRoute
+
 import org.json.JSONObject
 import java.io.IOException
 
@@ -25,10 +29,15 @@ object ChatCouriers {
     }
 
     /** Encola el mensaje. Ya está guardado en Room como PENDING, así que en el chat se ve con el reloj. */
-    suspend fun enqueueSend(memberId: Int, message: ChatMessage) {
+    suspend fun enqueueSend(memberId: Int, message: ChatMessage, tappedAt: Long) {
         Outbox.enqueue(
             SEND,
-            jsonOf("clientId" to message.clientId, "receiverId" to message.receiverId, "content" to message.content),
+            jsonOf(
+                "clientId" to message.clientId,
+                "receiverId" to message.receiverId,
+                "content" to message.content,
+                "tappedAt" to tappedAt,
+            ),
             memberId = memberId,
         )
     }
@@ -58,10 +67,12 @@ object ChatCouriers {
             val clientId = payload.getString("clientId")
             val friendId = payload.getInt("receiverId")
             val delivery = post(friendId, payload.getString("content"), clientId)
+            val savedAt = System.currentTimeMillis()
             when (delivery) {
                 Delivery.Sent -> {
                     LocalStore.markChatSent(clientId)
                     tell("Your message was sent")
+                    reportQueued(clientId, payload.optLong("tappedAt", 0L), savedAt)
                 }
                 // Queda FAILED con su motivo; discarded solo confirma que salió de la cola
                 is Delivery.Rejected -> LocalStore.markChatFailed(clientId, delivery.reason)
@@ -78,6 +89,13 @@ object ChatCouriers {
             Caches.chats.remove(payload.getInt("receiverId"))
             tell("A message couldn't be sent. Open the chat and tap Retry", failed = true)
         }
+    }
+
+    /** BQ 17: mide un mensaje que salió con la cola. Los de antes de este cambio no traen tappedAt y no se miden. */
+    private suspend fun reportQueued(clientId: String, tappedAt: Long, savedAt: Long) {
+        if (tappedAt <= 0L) return
+        val me = SessionVault.memberId() ?: return
+        ChatDeliveryReport.report(me, clientId, DeliveryRoute.Queued, tappedAt, savedAt)
     }
 
     /** Motivo que se muestra debajo del mensaje fallido (el backend lo explica en español). */
