@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,7 +48,6 @@ import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.SessionVault
 import co.gapfinder.mobile.foundation.rememberOnline
 import co.gapfinder.mobile.foundation.userText
-import co.gapfinder.mobile.ui.kit.CampusBoard
 import co.gapfinder.mobile.ui.kit.Glyphs
 import co.gapfinder.mobile.ui.kit.OfflineNote
 import co.gapfinder.mobile.ui.kit.PillButton
@@ -72,7 +70,7 @@ private const val TAG = "HangoutMapTab"
 private const val GPS_REQUIRED = "Location is required to discover tables nearby."
 private const val NO_CONNECTION = "No connection. Open Tables show up when you're back online."
 
-/** Pestaña "Open Tables": mapa del campus + mesas abiertas (antes MapScreen). */
+/** Pestaña "Open Tables": lista de mesas abiertas cerca del usuario (antes MapScreen). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HangoutMapTab() {
@@ -169,7 +167,6 @@ fun HangoutMapTab() {
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        MapBlock()
                         savedAt?.let { moment ->
                             OfflineNote(
                                 "${if (online) "Couldn't refresh" else "No connection"} · ${lastUpdatedText(moment)}",
@@ -262,31 +259,6 @@ private fun BoardHeader(viewerId: Int?) {
                 leading = Glyphs.addRounded,
             )
         }
-    }
-}
-
-@Composable
-private fun MapBlock() {
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        CampusBoard(onSpotTap = { /* futuro: cambiar de edificio */ })
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            LegendDot(Color(0xFFE91E63), "You are here")
-            Spacer(Modifier.width(16.dp))
-            LegendDot(Palette.Sky, "Open Tables")
-        }
-    }
-}
-
-@Composable
-private fun LegendDot(tone: Color, caption: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(tone, CircleShape))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = caption,
-            style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 11.sp, color = Palette.Ink.fade(0.6f)),
-        )
     }
 }
 
