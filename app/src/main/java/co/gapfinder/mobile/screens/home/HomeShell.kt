@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 private const val TAG = "HomeShell"
 private const val POLL_EVERY_MS = 10_000L
 
-/** Compone la pestaña siempre (como IndexedStack) pero solo la coloca si está seleccionada. */
+/** Compone la pestaña (como IndexedStack) pero solo la coloca si está seleccionada. */
 private fun Modifier.onlyWhen(visible: Boolean) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     layout(placeable.width, placeable.height) { if (visible) placeable.place(0, 0) }
@@ -53,6 +53,8 @@ private class PollerState {
 @Composable
 fun HomeShell() {
     var selected by rememberSaveable { mutableStateOf(DockTab.Schedule) }
+    // Pestañas ya visitadas (por nombre, para que se guarde al rotar); solo esas están compuestas
+    var visited by rememberSaveable { mutableStateOf(setOf(selected.name)) }
     val handledInvites = remember { mutableSetOf<Int>() } // para no repetir pop-ups
     val poller = remember { PollerState() }
     val scope = rememberCoroutineScope()
@@ -117,23 +119,25 @@ fun HomeShell() {
     }
 
     Column(Modifier.fillMaxSize().background(Palette.Fog)) {
+        // Cada pestaña se compone la primera vez que se visita y después se queda viva (conserva su estado y
+        // su scroll). Al arrancar solo se compone la que se ve, no las 5 con sus consultas a la red.
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Schedule)) {
+            if (DockTab.Schedule.name in visited) Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Schedule)) {
                 TimetableTab(isActive = selected == DockTab.Schedule)
             }
-            Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Friends)) {
+            if (DockTab.Friends.name in visited) Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Friends)) {
                 FriendsTab(isActive = selected == DockTab.Friends)
             }
-            Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Match)) {
+            if (DockTab.Match.name in visited) Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Match)) {
                 PairingTab(isActive = selected == DockTab.Match)
             }
-            Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Map)) {
+            if (DockTab.Map.name in visited) Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Map)) {
                 HangoutMapTab()
             }
-            Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Suggest)) {
+            if (DockTab.Suggest.name in visited) Box(Modifier.fillMaxSize().onlyWhen(selected == DockTab.Suggest)) {
                 RecommendationsTab(isActive = selected == DockTab.Suggest)
             }
         }
-        DockBar(active = selected, onSelect = { selected = it })
+        DockBar(active = selected, onSelect = { visited = visited + it.name; selected = it })
     }
 }
