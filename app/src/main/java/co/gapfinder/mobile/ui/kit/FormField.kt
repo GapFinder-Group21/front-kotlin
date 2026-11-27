@@ -34,7 +34,7 @@ fun FormField(
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     secret: Boolean = false,
-     maxLength: Int? = null,
+    maxLength: Int? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
