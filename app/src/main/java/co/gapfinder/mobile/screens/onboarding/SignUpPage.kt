@@ -181,16 +181,17 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(24.dp))
 
-            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it })
-            Spacer(Modifier.height(14.dp))
+            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it },
+    maxLength = SignUpRules.NAME_MAX)
 
-            FormField(
-                placeholder = "Email",
-                value = mail,
-                onValueChange = { mail = it },
-                keyboardType = KeyboardType.Email,
-            )
-            Spacer(Modifier.height(14.dp))
+FormField(placeholder = "Email", value = mail, onValueChange = { mail = it },
+    keyboardType = KeyboardType.Email, maxLength = SignUpRules.EMAIL_MAX)
+
+FormField(placeholder = "Phone Number", value = phone, onValueChange = { phone = it },
+    keyboardType = KeyboardType.Phone, maxLength = SignUpRules.PHONE_LENGTH)
+
+FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)", value = secretWord,
+    onValueChange = { secretWord = it }, secret = true, maxLength = SignUpRules.PASSWORD_MAX)
 
             FieldCaption("Career")
             Spacer(Modifier.height(6.dp))
@@ -210,13 +211,7 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(14.dp))
 
-            FormField(
-                placeholder = "Phone Number",
-                value = phone,
-                onValueChange = { phone = it },
-                keyboardType = KeyboardType.Phone,
-            )
-            Spacer(Modifier.height(14.dp))
+            
 
             FieldCaption("Preferred Effort")
             Spacer(Modifier.height(6.dp))
@@ -228,14 +223,7 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(14.dp))
 
-            FormField(
-                placeholder = "Password (min $MIN_PASSWORD_LENGTH characters)",
-                value = secretWord,
-                onValueChange = { secretWord = it },
-                secret = true,
-            )
-            Spacer(Modifier.height(14.dp))
-
+            
             FormField(
                 placeholder = "Confirm Password",
                 value = secretRepeat,
