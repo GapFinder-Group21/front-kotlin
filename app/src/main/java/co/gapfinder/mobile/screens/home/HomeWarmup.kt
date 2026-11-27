@@ -3,6 +3,7 @@ package co.gapfinder.mobile.screens.home
 import android.os.SystemClock
 import android.util.Log
 import co.gapfinder.mobile.data.AlertRepository
+import co.gapfinder.mobile.data.HangoutCatalogs
 import co.gapfinder.mobile.data.LectureRepository
 import co.gapfinder.mobile.data.RecommendationRepository
 import co.gapfinder.mobile.data.WindowRepository
@@ -54,13 +55,17 @@ internal object HomeWarmup {
         val inbox = scope.async { attempt { AlertRepository.inboxOf(me) } }
         val suggested = scope.async { attempt { RecommendationRepository.hangoutsFor(me) } }
 
+        // Los catálogos del wizard de Open Tables quedan en Room desde el inicio, así se puede crear una mesa sin red
+        // aunque el wizard no se haya abierto antes con conexión. Nadie la espera: si falla, el wizard la vuelve a pedir
+        val catalogs = scope.async { attempt { HangoutCatalogs.refresh() } }
+
         // El horario se arma con clases + gaps, pero las cuatro peticiones ya van corriendo a la vez
         timetable = scope.async { combineTimetable(me, lectures.await(), windows.await()) }
         alerts = inbox
         recommendation = suggested
 
         scope.launch {
-            awaitAll(lectures, windows, inbox, suggested)
+            awaitAll(lectures, windows, inbox, suggested, catalogs)
             Log.d(TAG, "⚡ Home cargado en paralelo en ${SystemClock.elapsedRealtime() - began} ms")
         }
     }
