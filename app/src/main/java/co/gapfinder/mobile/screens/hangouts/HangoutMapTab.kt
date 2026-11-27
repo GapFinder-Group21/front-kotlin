@@ -14,9 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -161,19 +162,19 @@ fun HangoutMapTab() {
                     onRefresh = { scope.launch { refreshBoard() } },
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState()),
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         savedAt?.let { moment ->
-                            OfflineNote(
-                                "${if (online) "Couldn't refresh" else "No connection"} · ${lastUpdatedText(moment)}",
-                                Modifier.padding(horizontal = 16.dp),
-                            )
+                            item(key = "offline-note") {
+                                OfflineNote(
+                                    "${if (online) "Couldn't refresh" else "No connection"} · ${lastUpdatedText(moment)}",
+                                    Modifier.padding(horizontal = 16.dp),
+                                )
+                            }
                         }
-                        ListingBlock(
+                        listingItems(
                             notice = notice,
                             listings = listings,
                             viewerId = viewerId,
@@ -262,8 +263,11 @@ private fun BoardHeader(viewerId: Int?) {
     }
 }
 
-@Composable
-private fun ListingBlock(
+/**
+ * Contenido de la lista como items perezosos: solo se componen las tarjetas visibles (cada una trae
+ * sombra, foto y avatar), no todas las mesas abiertas de una vez.
+ */
+private fun LazyListScope.listingItems(
     notice: String?,
     listings: List<Hangout>,
     viewerId: Int?,
@@ -273,61 +277,67 @@ private fun ListingBlock(
     onOpen: (Hangout) -> Unit,
 ) {
     if (notice != null) {
-        val gpsIssue = notice.contains("Location is required")
-        Column(
-            Modifier.fillMaxWidth().padding(40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = if (gpsIssue) Glyphs.locationOffRounded else Glyphs.infoOutlineRounded,
-                contentDescription = null,
-                tint = Palette.Coral,
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = notice,
-                textAlign = TextAlign.Center,
-                style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 14.sp, color = Palette.Coral),
-            )
-            Spacer(Modifier.height(24.dp))
-            PillButton(
-                label = if (gpsIssue) "Enable Location" else "Retry",
-                onClick = if (gpsIssue) onEnableGps else onRetry,
-                compact = true,
-            )
+        item(key = "notice") {
+            val gpsIssue = notice.contains("Location is required")
+            Column(
+                Modifier.fillMaxWidth().padding(40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = if (gpsIssue) Glyphs.locationOffRounded else Glyphs.infoOutlineRounded,
+                    contentDescription = null,
+                    tint = Palette.Coral,
+                    modifier = Modifier.size(48.dp),
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = notice,
+                    textAlign = TextAlign.Center,
+                    style = Typo.paragraph(FontWeight.Bold).copy(fontSize = 14.sp, color = Palette.Coral),
+                )
+                Spacer(Modifier.height(24.dp))
+                PillButton(
+                    label = if (gpsIssue) "Enable Location" else "Retry",
+                    onClick = if (gpsIssue) onEnableGps else onRetry,
+                    compact = true,
+                )
+            }
         }
         return
     }
 
     if (listings.isEmpty()) {
-        Column(
-            Modifier.fillMaxWidth().padding(40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = Glyphs.coffeeMakerRounded,
-                contentDescription = null,
-                tint = Palette.Ink.fade(0.1f),
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = "No active tables available to discover right now.",
-                textAlign = TextAlign.Center,
-                style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.4f)),
-            )
+        item(key = "empty") {
+            Column(
+                Modifier.fillMaxWidth().padding(40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Glyphs.coffeeMakerRounded,
+                    contentDescription = null,
+                    tint = Palette.Ink.fade(0.1f),
+                    modifier = Modifier.size(48.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "No active tables available to discover right now.",
+                    textAlign = TextAlign.Center,
+                    style = Typo.paragraph().copy(fontSize = 14.sp, color = Palette.Ink.fade(0.4f)),
+                )
+            }
         }
         return
     }
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        listings.forEach { item ->
-            // El creador también cuenta como dentro de la mesa
-            val alreadyIn = item.host?.id == viewerId || item.id in joinedIds
+    item(key = "top-space") { Spacer(Modifier.height(8.dp)) }
+    items(listings, key = { it.id }) { item ->
+        // El creador también cuenta como dentro de la mesa
+        val alreadyIn = item.host?.id == viewerId || item.id in joinedIds
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             DiscoverCard(item, alreadyIn = alreadyIn, onOpen = { onOpen(item) })
         }
     }
+    item(key = "bottom-space") { Spacer(Modifier.height(8.dp)) }
 }
 
 @Composable
