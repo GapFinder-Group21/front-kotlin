@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AccountRepository
 import co.gapfinder.mobile.domain.EnergyLevel
+import co.gapfinder.mobile.domain.SignUpRules
 import co.gapfinder.mobile.foundation.ACADEMIC_PROGRAMS
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
@@ -64,7 +65,6 @@ import kotlinx.coroutines.launch
 private val OutlineTone = Color(0xFF79747E)
 private val ArrowTone = Color(0xFF616161)
 
-private const val MIN_PASSWORD_LENGTH = 8
 private val SEMESTER_RANGE = 1..12
 
 /** Registro de cuenta nueva. */
@@ -90,26 +90,12 @@ fun SignUpPage() {
         val address = mail.trim().lowercase()
         val phoneNumber = phone.trim()
 
+        // Se valida campo por campo y se avisa del primero que falle
         SignUpRules.nameProblem(name)?.let { Toaster.show(it); return }
         SignUpRules.emailProblem(address)?.let { Toaster.show(it); return }
         SignUpRules.passwordProblem(secretWord)?.let { Toaster.show(it); return }
-        SignUpRules.phoneProblem(phoneNumber)?.let { Toaster.show(it); return }
         if (secretWord != secretRepeat) {
             Toaster.show("The passwords don't match")
-            return
-        } 
-
-        // Se valida campo por campo y se avisa del primero que falle
-        if (name.isEmpty()) {
-            Toaster.show("Please enter your name")
-            return
-        }
-        if (address.isEmpty() || !address.contains("@")) {
-            Toaster.show("Please enter a valid email")
-            return
-        }
-        if (secretWord.length <  ) {
-            Toaster.show("The password must have at least $MIN_PASSWORD_LENGTH characters")
             return
         }
         val semester = term.trim().toIntOrNull()
@@ -122,10 +108,7 @@ fun SignUpPage() {
             Toaster.show("Please select a career")
             return
         }
-        if (phoneNumber.isEmpty()) {
-            Toaster.show("Please enter your phone number")
-            return
-        }
+        SignUpRules.phoneProblem(phoneNumber)?.let { Toaster.show(it); return }
         // Sin red no se intenta: se avisa y se espera a que vuelva
         if (!Connectivity.isOnline()) {
             waitingForNetwork = true
@@ -186,17 +169,17 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(24.dp))
 
-            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it },
-    maxLength = SignUpRules.NAME_MAX)
+            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it }, maxLength = SignUpRules.NAME_MAX)
+            Spacer(Modifier.height(14.dp))
 
-FormField(placeholder = "Email", value = mail, onValueChange = { mail = it },
-    keyboardType = KeyboardType.Email, maxLength = SignUpRules.EMAIL_MAX)
-
-FormField(placeholder = "Phone Number", value = phone, onValueChange = { phone = it },
-    keyboardType = KeyboardType.Phone, maxLength = SignUpRules.PHONE_LENGTH)
-
-FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)", value = secretWord,
-    onValueChange = { secretWord = it SignUpRules.PASSWORD_MIN}, secret = true, maxLength = SignUpRules.PASSWORD_MAX)
+            FormField(
+                placeholder = "Email",
+                value = mail,
+                onValueChange = { mail = it },
+                keyboardType = KeyboardType.Email,
+                maxLength = SignUpRules.EMAIL_MAX,
+            )
+            Spacer(Modifier.height(14.dp))
 
             FieldCaption("Career")
             Spacer(Modifier.height(6.dp))
@@ -216,7 +199,14 @@ FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
             )
             Spacer(Modifier.height(14.dp))
 
-            
+            FormField(
+                placeholder = "Phone Number",
+                value = phone,
+                onValueChange = { phone = it },
+                keyboardType = KeyboardType.Phone,
+                maxLength = SignUpRules.PHONE_LENGTH,
+            )
+            Spacer(Modifier.height(14.dp))
 
             FieldCaption("Preferred Effort")
             Spacer(Modifier.height(6.dp))
@@ -228,12 +218,21 @@ FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
             )
             Spacer(Modifier.height(14.dp))
 
-            
+            FormField(
+                placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
+                value = secretWord,
+                onValueChange = { secretWord = it },
+                secret = true,
+                maxLength = SignUpRules.PASSWORD_MAX,
+            )
+            Spacer(Modifier.height(14.dp))
+
             FormField(
                 placeholder = "Confirm Password",
                 value = secretRepeat,
                 onValueChange = { secretRepeat = it },
                 secret = true,
+                maxLength = SignUpRules.PASSWORD_MAX,
             )
 
             Spacer(Modifier.height(28.dp))
