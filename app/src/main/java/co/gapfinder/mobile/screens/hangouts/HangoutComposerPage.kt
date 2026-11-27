@@ -62,9 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AttendeeRepository
 import co.gapfinder.mobile.data.HangoutPhotos
+import co.gapfinder.mobile.data.HangoutCatalogs
 import co.gapfinder.mobile.data.HangoutRepository
-import co.gapfinder.mobile.data.PastimeRepository
-import co.gapfinder.mobile.data.SpotRepository
 import co.gapfinder.mobile.data.local.HangoutDraftEntity
 import co.gapfinder.mobile.data.local.LocalStore
 import co.gapfinder.mobile.data.outbox.HangoutCouriers
@@ -91,8 +90,6 @@ import co.gapfinder.mobile.ui.theme.Typo
 import co.gapfinder.mobile.ui.theme.fade
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -189,14 +186,7 @@ fun HangoutComposerPage() {
             val (fetchedPastimes, fetchedSpots) = try {
                 if (!Connectivity.isOnline()) throw IOException("offline")
                 // Catálogos en paralelo; se guardan para poder crear mesas sin red
-                coroutineScope {
-                    val a = async { PastimeRepository.catalog() }
-                    val b = async { SpotRepository.all() }
-                    a.await() to b.await()
-                }.also { (fresh, places) ->
-                    LocalStore.savePastimes(fresh)
-                    LocalStore.saveSpots(places)
-                }
+                HangoutCatalogs.refresh()
             } catch (e: IOException) {
                 // Sin red: los catálogos que se guardaron la última vez
                 val savedPastimes = LocalStore.pastimes()
