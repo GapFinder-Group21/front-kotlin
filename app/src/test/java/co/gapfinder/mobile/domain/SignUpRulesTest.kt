@@ -1,4 +1,4 @@
-package co.gapfinder.mobile.domain.data
+package co.gapfinder.mobile.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
