@@ -37,6 +37,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material.icons.rounded.CoffeeMaker
 import androidx.compose.material.icons.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.EditCalendar
@@ -103,6 +105,8 @@ object Glyphs {
     val tableRestaurantOutlined: ImageVector = Icons.Outlined.TableRestaurant
     val tableBarRounded: ImageVector = Icons.Rounded.TableBar
     val cloudOff: ImageVector = Icons.Filled.CloudOff
+    val cloudOffRounded: ImageVector = Icons.Rounded.CloudOff
+    val wifiOffRounded: ImageVector = Icons.Rounded.WifiOff
     val closeRounded: ImageVector = Icons.Rounded.Close
     val searchRounded: ImageVector = Icons.Rounded.Search
     val clearRounded: ImageVector = Icons.Rounded.Clear
