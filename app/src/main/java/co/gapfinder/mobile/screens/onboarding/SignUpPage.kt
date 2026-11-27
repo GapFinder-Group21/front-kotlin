@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AccountRepository
 import co.gapfinder.mobile.domain.EnergyLevel
+import co.gapfinder.mobile.domain.SignUpRules
 import co.gapfinder.mobile.foundation.ACADEMIC_PROGRAMS
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
@@ -181,17 +182,22 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(24.dp))
 
-            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it },
-    maxLength = SignUpRules.NAME_MAX)
+            FormField(
+                placeholder = "Full Name",
+                value = fullName,
+                onValueChange = { fullName = it },
+                maxLength = SignUpRules.NAME_MAX,
+            )
+            Spacer(Modifier.height(14.dp))
 
-FormField(placeholder = "Email", value = mail, onValueChange = { mail = it },
-    keyboardType = KeyboardType.Email, maxLength = SignUpRules.EMAIL_MAX)
-
-FormField(placeholder = "Phone Number", value = phone, onValueChange = { phone = it },
-    keyboardType = KeyboardType.Phone, maxLength = SignUpRules.PHONE_LENGTH)
-
-FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)", value = secretWord,
-    onValueChange = { secretWord = it }, secret = true, maxLength = SignUpRules.PASSWORD_MAX)
+            FormField(
+                placeholder = "Email",
+                value = mail,
+                onValueChange = { mail = it },
+                keyboardType = KeyboardType.Email,
+                maxLength = SignUpRules.EMAIL_MAX,
+            )
+            Spacer(Modifier.height(14.dp))
 
             FieldCaption("Career")
             Spacer(Modifier.height(6.dp))
@@ -211,7 +217,14 @@ FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
             )
             Spacer(Modifier.height(14.dp))
 
-            
+            FormField(
+                placeholder = "Phone Number",
+                value = phone,
+                onValueChange = { phone = it },
+                keyboardType = KeyboardType.Phone,
+                maxLength = SignUpRules.PHONE_LENGTH,
+            )
+            Spacer(Modifier.height(14.dp))
 
             FieldCaption("Preferred Effort")
             Spacer(Modifier.height(6.dp))
@@ -223,12 +236,21 @@ FormField(placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
             )
             Spacer(Modifier.height(14.dp))
 
-            
+            FormField(
+                placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
+                value = secretWord,
+                onValueChange = { secretWord = it },
+                secret = true,
+                maxLength = SignUpRules.PASSWORD_MAX,
+            )
+            Spacer(Modifier.height(14.dp))
+
             FormField(
                 placeholder = "Confirm Password",
                 value = secretRepeat,
                 onValueChange = { secretRepeat = it },
                 secret = true,
+                maxLength = SignUpRules.PASSWORD_MAX,
             )
 
             Spacer(Modifier.height(28.dp))
