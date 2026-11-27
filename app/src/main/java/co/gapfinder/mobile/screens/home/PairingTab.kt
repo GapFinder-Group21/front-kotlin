@@ -154,16 +154,13 @@ fun PairingTab(isActive: Boolean) {
                 modifier = Modifier.weight(1f),
             )
             // Entrada a "My matches": historial y calificaciones
-            Row(
+            Box(
                 Modifier
-                    .background(Palette.White.fade(0.12f), RoundedCornerShape(20.dp))
+                    .background(Palette.Sky, RoundedCornerShape(20.dp))
                     .inkTap(RoundedCornerShape(20.dp)) { StackNavigator.go(Destination.MyMatches) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Glyphs.historyRounded, contentDescription = null, tint = Palette.White, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("My matches", style = Typo.paragraph(FontWeight.ExtraBold).copy(fontSize = 12.sp, color = Palette.White))
+                Text("My matches", style = Typo.label(FontWeight.Bold).copy(fontSize = 12.sp, color = Palette.White))
             }
         }
 
