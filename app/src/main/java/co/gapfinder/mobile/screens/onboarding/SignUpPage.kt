@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.gapfinder.mobile.data.AccountRepository
 import co.gapfinder.mobile.domain.EnergyLevel
+import co.gapfinder.mobile.domain.SignUpRules
 import co.gapfinder.mobile.foundation.ACADEMIC_PROGRAMS
 import co.gapfinder.mobile.foundation.Connectivity
 import co.gapfinder.mobile.foundation.rememberOnline
@@ -64,7 +65,6 @@ import kotlinx.coroutines.launch
 private val OutlineTone = Color(0xFF79747E)
 private val ArrowTone = Color(0xFF616161)
 
-private const val MIN_PASSWORD_LENGTH = 8
 private val SEMESTER_RANGE = 1..12
 
 /** Registro de cuenta nueva. */
@@ -91,18 +91,9 @@ fun SignUpPage() {
         val phoneNumber = phone.trim()
 
         // Se valida campo por campo y se avisa del primero que falle
-        if (name.isEmpty()) {
-            Toaster.show("Please enter your name")
-            return
-        }
-        if (address.isEmpty() || !address.contains("@")) {
-            Toaster.show("Please enter a valid email")
-            return
-        }
-        if (secretWord.length < MIN_PASSWORD_LENGTH) {
-            Toaster.show("The password must have at least $MIN_PASSWORD_LENGTH characters")
-            return
-        }
+        SignUpRules.nameProblem(name)?.let { Toaster.show(it); return }
+        SignUpRules.emailProblem(address)?.let { Toaster.show(it); return }
+        SignUpRules.passwordProblem(secretWord)?.let { Toaster.show(it); return }
         if (secretWord != secretRepeat) {
             Toaster.show("The passwords don't match")
             return
@@ -117,10 +108,7 @@ fun SignUpPage() {
             Toaster.show("Please select a career")
             return
         }
-        if (phoneNumber.isEmpty()) {
-            Toaster.show("Please enter your phone number")
-            return
-        }
+        SignUpRules.phoneProblem(phoneNumber)?.let { Toaster.show(it); return }
         // Sin red no se intenta: se avisa y se espera a que vuelva
         if (!Connectivity.isOnline()) {
             waitingForNetwork = true
@@ -181,7 +169,7 @@ fun SignUpPage() {
             )
             Spacer(Modifier.height(24.dp))
 
-            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it })
+            FormField(placeholder = "Full Name", value = fullName, onValueChange = { fullName = it }, maxLength = SignUpRules.NAME_MAX)
             Spacer(Modifier.height(14.dp))
 
             FormField(
@@ -189,6 +177,7 @@ fun SignUpPage() {
                 value = mail,
                 onValueChange = { mail = it },
                 keyboardType = KeyboardType.Email,
+                maxLength = SignUpRules.EMAIL_MAX,
             )
             Spacer(Modifier.height(14.dp))
 
@@ -215,6 +204,7 @@ fun SignUpPage() {
                 value = phone,
                 onValueChange = { phone = it },
                 keyboardType = KeyboardType.Phone,
+                maxLength = SignUpRules.PHONE_LENGTH,
             )
             Spacer(Modifier.height(14.dp))
 
@@ -229,10 +219,11 @@ fun SignUpPage() {
             Spacer(Modifier.height(14.dp))
 
             FormField(
-                placeholder = "Password (min $MIN_PASSWORD_LENGTH characters)",
+                placeholder = "Password (min ${SignUpRules.PASSWORD_MIN} characters)",
                 value = secretWord,
                 onValueChange = { secretWord = it },
                 secret = true,
+                maxLength = SignUpRules.PASSWORD_MAX,
             )
             Spacer(Modifier.height(14.dp))
 
@@ -241,6 +232,7 @@ fun SignUpPage() {
                 value = secretRepeat,
                 onValueChange = { secretRepeat = it },
                 secret = true,
+                maxLength = SignUpRules.PASSWORD_MAX,
             )
 
             Spacer(Modifier.height(28.dp))

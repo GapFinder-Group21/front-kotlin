@@ -34,6 +34,7 @@ fun FormField(
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     secret: Boolean = false,
+    maxLength: Int? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
@@ -42,7 +43,7 @@ fun FormField(
 
     BasicTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { typed -> onValueChange(if (maxLength == null) typed else typed.take(maxLength)) },
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
         textStyle = textStyle,
